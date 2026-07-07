@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inventario Premium Multi-Sucursal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="logo-area">
+        <div>
+          <h1>Barber Stock</h1>
+          <p>Sistema profesional de inventario y ventas multi-sucursal</p>
+        </div>
+        <span class="gold-badge">Modo producción</span>
+      </div>
+
+      <nav class="nav-menu" aria-label="Secciones">
+        <button class="nav-link active" data-view="dashboard">Panel</button>
+        <button class="nav-link" data-view="inventario">Inventario</button>
+        <button class="nav-link" data-view="ventas">Ventas</button>
+        <button class="nav-link" data-view="movimientos">Movimientos</button>
+      </nav>
+
+      <div class="stats-row">
+        <div class="stat-chip">Stock total: <strong id="chipStock">0</strong></div>
+        <div class="stat-chip">Ventas hoy: <strong id="chipVentas">Bs 0.00</strong></div>
+        <div class="sucursal-selector">
+          <label for="branchSelect">Sucursal</label>
+          <select id="branchSelect">
+            <option value="TODAS">Todas</option>
+            <option value="PUCARANI">PUCARANI</option>
+            <option value="UPEA">UPEA</option>
+            <option value="BALLIVIAN">BALLIVIAN</option>
+            <option value="TIENDA">TIENDA</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="view active" id="dashboard">
+        <div class="metric-grid">
+          <article class="metric">
+            <span>Valor inventario</span>
+            <strong id="metricValue">Bs 0.00</strong>
+          </article>
+          <article class="metric">
+            <span>Productos bajos</span>
+            <strong id="metricLow">0</strong>
+          </article>
+          <article class="metric">
+            <span>Productos agotados</span>
+            <strong id="metricOut">0</strong>
+          </article>
+          <article class="metric">
+            <span>Ganancia aprox.</span>
+            <strong id="metricProfit">Bs 0.00</strong>
+          </article>
+        </div>
+
+        <section class="card">
+          <div class="card-header">
+            <span>Resumen por sucursal</span>
+            <button class="btn-normal" id="refreshBtn">Actualizar</button>
+          </div>
+          <div class="card-body">
+            <div class="branch-grid" id="branchSummary"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <span>Productos con alerta</span>
+            <span class="header-note">Stock mínimo y agotados</span>
+          </div>
+          <div class="card-body">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>SKU</th>
+                    <th>Sucursal</th>
+                    <th>Stock</th>
+                    <th>Mínimo</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="alertRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="inventario">
+        <section class="card">
+          <div class="card-header">
+            <span>Gestión de productos</span>
+            <span class="header-note">Altas rápidas y stock por sucursal</span>
+          </div>
+          <div class="card-body">
+            <form class="form-grid" id="productForm">
+              <div class="form-group">
+                <label for="productName">Producto</label>
+                <input id="productName" required placeholder="Pomada premium">
+              </div>
+              <div class="form-group">
+                <label for="productSku">SKU</label>
+                <input id="productSku" required placeholder="BAR-001">
+              </div>
+              <div class="form-group">
+                <label for="productBarcode">Código de barras</label>
+                <input id="productBarcode" placeholder="Opcional">
+              </div>
+              <div class="form-group">
+                <label for="productQr">Código QR</label>
+                <input id="productQr" placeholder="Opcional">
+              </div>
+              <div class="form-group">
+                <label for="productCategory">Categoría</label>
+                <select id="productCategory">
+                  <option>Cabello</option>
+                  <option>Barba</option>
+                  <option>Herramientas</option>
+                  <option>Tratamientos</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="productBrand">Marca</label>
+                <input id="productBrand" placeholder="Opcional">
+              </div>
+              <div class="form-group">
+                <label for="productProvider">Proveedor</label>
+                <input id="productProvider" placeholder="Opcional">
+              </div>
+              <div class="form-group">
+                <label for="buyPrice">Precio compra</label>
+                <input id="buyPrice" type="number" min="0" step="0.01" required value="25">
+              </div>
+              <div class="form-group">
+                <label for="sellPrice">Precio venta</label>
+                <input id="sellPrice" type="number" min="0" step="0.01" required value="45">
+              </div>
+              <div class="form-group">
+                <label for="minStock">Stock mínimo</label>
+                <input id="minStock" type="number" min="0" required value="5">
+              </div>
+              <div class="form-group">
+                <label for="initialStock">Stock inicial</label>
+                <input id="initialStock" type="number" min="0" required value="10">
+              </div>
+              <button class="btn-script-main" type="submit">Guardar producto</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <span>Inventario consolidado</span>
+            <div class="search-box">
+              <input id="inventorySearch" placeholder="Buscar nombre, SKU o categoría">
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>SKU</th>
+                    <th>Categoría</th>
+                    <th>Precio</th>
+                    <th>PUCARANI</th>
+                    <th>UPEA</th>
+                    <th>BALLIVIAN</th>
+                    <th>TIENDA</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="ventas">
+        <div class="sales-layout">
+          <section class="card">
+            <div class="card-header">
+              <span>Nueva venta</span>
+              <span class="header-note">Busca, agrega y confirma</span>
+            </div>
+            <div class="card-body">
+              <div class="form-grid compact">
+                <div class="form-group wide">
+                  <label for="saleSearch">Producto</label>
+                  <input id="saleSearch" placeholder="Nombre, SKU, código de barras o QR">
+                </div>
+                <div class="form-group">
+                  <label for="saleQty">Cantidad</label>
+                  <input id="saleQty" type="number" min="1" value="1">
+                </div>
+                <div class="form-group">
+                  <label for="salePrice">Precio aplicado</label>
+                  <input id="salePrice" type="number" min="0" step="0.01" placeholder="Automático">
+                </div>
+                <div class="form-group">
+                  <label for="priceReason">Motivo cambio</label>
+                  <input id="priceReason" placeholder="Promoción, descuento...">
+                </div>
+                <div class="form-group">
+                  <label for="authorizedBy">Autoriza</label>
+                  <input id="authorizedBy" placeholder="Admin o encargado">
+                </div>
+                <button class="btn-script-main" id="addToCart" type="button">Agregar</button>
+              </div>
+
+              <div class="table-wrapper cart-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Cant.</th>
+                      <th>Precio</th>
+                      <th>Total</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="cartRows"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <aside class="card checkout-card">
+            <div class="card-header">
+              <span>Cobro</span>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label for="sellerName">Vendedor</label>
+                <input id="sellerName" value="Administrador">
+              </div>
+              <div class="form-group">
+                <label for="customerName">Cliente opcional</label>
+                <input id="customerName" placeholder="Sin nombre">
+              </div>
+              <div class="form-group">
+                <label for="paymentMethod">Método de pago</label>
+                <select id="paymentMethod">
+                  <option>Efectivo</option>
+                  <option>QR</option>
+                  <option>Tarjeta</option>
+                  <option>Transferencia</option>
+                  <option>Otro</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="discountInput">Descuento</label>
+                <input id="discountInput" type="number" min="0" step="0.01" value="0">
+              </div>
+              <div class="totals">
+                <div><span>Subtotal</span><strong id="subtotalText">Bs 0.00</strong></div>
+                <div><span>Descuento</span><strong id="discountText">Bs 0.00</strong></div>
+                <div class="grand-total"><span>Total</span><strong id="totalText">Bs 0.00</strong></div>
+              </div>
+              <button class="btn-script-main full" id="confirmSale">Confirmar venta</button>
+            </div>
+          </aside>
+        </div>
+
+        <section class="card">
+          <div class="card-header">
+            <span>Historial de ventas</span>
+            <span class="header-note">Completadas y listas para comprobante</span>
+          </div>
+          <div class="card-body">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Número</th>
+                    <th>Fecha</th>
+                    <th>Sucursal</th>
+                    <th>Vendedor</th>
+                    <th>Total</th>
+                    <th>Pago</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="salesRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="movimientos">
+        <section class="card">
+          <div class="card-header">
+            <span>Historial de movimientos</span>
+            <span class="header-note">Entradas, salidas y ventas</span>
+          </div>
+          <div class="card-body">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Producto</th>
+                    <th>Sucursal</th>
+                    <th>Cantidad</th>
+                    <th>Usuario</th>
+                  </tr>
+                </thead>
+                <tbody id="movementRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
