@@ -37,6 +37,7 @@ const els = {
   toast: document.querySelector("#toast"),
 };
 
+// NAVEGACIÓN
 document.querySelectorAll(".nav-link").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".nav-link").forEach((item) => item.classList.remove("active"));
@@ -53,9 +54,14 @@ els.branchSelect.addEventListener("change", render);
 els.inventorySearch.addEventListener("input", renderInventory);
 els.discountInput.addEventListener("input", renderCart);
 
+// ============================================
+// FORMULARIO DE PRODUCTO CON IMAGEN
+// ============================================
 els.productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const branch = selectedBranch() === "TODAS" ? "TIENDA" : selectedBranch();
+
+  const imageFile = document.querySelector("#productImage")?.files[0];
 
   const payload = {
     name: document.querySelector("#productName").value.trim(),
@@ -73,12 +79,24 @@ els.productForm.addEventListener("submit", async (event) => {
   };
 
   try {
-    await request("/products", {
+    const productResult = await request("/products", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+
+    if (imageFile && productResult.id) {
+      const formData = new FormData();
+      formData.append('product_id', productResult.id);
+      formData.append('image', imageFile);
+      await fetch(`${API_BASE}/upload/product-image`, {
+        method: 'POST',
+        body: formData,
+      });
+    }
+
     els.productForm.reset();
     setDefaultProductValues();
+    document.querySelector("#imagePreview").style.display = 'none';
     showToast("Producto guardado en la base de datos");
     await loadData();
   } catch (error) {
@@ -86,6 +104,28 @@ els.productForm.addEventListener("submit", async (event) => {
   }
 });
 
+// Previsualizar imagen
+document.addEventListener('change', function(e) {
+  if (e.target.id === 'productImage') {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const preview = document.querySelector('#previewImg');
+        const container = document.querySelector('#imagePreview');
+        if (preview && container) {
+          preview.src = event.target.result;
+          container.style.display = 'block';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+});
+
+// ============================================
+// CARGA DE DATOS
+// ============================================
 async function loadData() {
   try {
     const [productData, saleData, movementData] = await Promise.all([
@@ -98,6 +138,7 @@ async function loadData() {
     sales = saleData;
     movements = movementData;
     render();
+    setTimeout(updateFilters, 100);
   } catch (error) {
     showToast("No se pudo conectar con la API");
     render();
@@ -132,12 +173,17 @@ function productStock(product, branch = selectedBranch()) {
 
 function visibleProducts() {
   const term = els.inventorySearch.value.trim().toLowerCase();
+  const categoryFilter = document.getElementById('filterCategory')?.value || '';
+  const brandFilter = document.getElementById('filterBrand')?.value || '';
+
   return products.filter((product) => {
     const matchesBranch = selectedBranch() === "TODAS" || productStock(product) > 0;
     const matchesTerm = [product.name, product.sku, product.category, product.barcode, product.qr_code].some((value) =>
       String(value || "").toLowerCase().includes(term)
     );
-    return matchesBranch && matchesTerm;
+    const matchesCategory = !categoryFilter || product.category === categoryFilter;
+    const matchesBrand = !brandFilter || product.brand === brandFilter;
+    return matchesBranch && matchesTerm && matchesCategory && matchesBrand;
   });
 }
 
@@ -215,6 +261,9 @@ function renderAlerts() {
     : `<tr><td colspan="6">No hay alertas. Cuando cargues productos con stock bajo aparecerán aquí.</td></tr>`;
 }
 
+// ============================================
+// INVENTARIO CON EDITOR Y AJUSTE DE STOCK
+// ============================================
 function renderInventory() {
   const rows = visibleProducts();
   els.inventoryRows.innerHTML = rows.length
@@ -222,21 +271,372 @@ function renderInventory() {
       const total = BRANCHES.reduce((sum, branch) => sum + Number(product.stock[branch] || 0), 0);
       return `
         <tr>
-          <td>${product.name}</td>
+          <td style="display: flex; align-items: center; gap: 8px;">
+            <img src="${product.image_url || '/placeholder.png'}" 
+                 style="width: 30px; height: 30px; object-fit: cover; border-radius: 4px; background: #1a1814;"
+                 onerror="this.src='/placeholder.png'">
+            ${product.name}
+          </td>
           <td>${product.sku}</td>
           <td>${product.category || ""}</td>
           <td>${money.format(product.sale_price)}</td>
-          <td>${product.stock.PUCARANI || 0}</td>
-          <td>${product.stock.UPEA || 0}</td>
-          <td>${product.stock.BALLIVIAN || 0}</td>
-          <td>${product.stock.TIENDA || 0}</td>
+          ${BRANCHES.map(branch => `
+            <td>
+              ${product.stock[branch] || 0}
+              <button class="action-link" onclick="adjustStock(${product.id}, '${branch}', ${product.stock[branch] || 0})" 
+                      style="font-size: 10px; margin-left: 4px;" title="Ajustar stock">🔧</button>
+            </td>
+          `).join('')}
           <td><strong>${total}</strong></td>
+          <td>
+            <button class="action-link" onclick="editProduct(${product.id})" title="Editar producto">✏️</button>
+          </td>
         </tr>
       `;
     }).join("")
-    : `<tr><td colspan="9">Inventario vacío. Registra tu primer producto desde el formulario superior.</td></tr>`;
+    : `<tr><td colspan="${BRANCHES.length + 5}">Inventario vacío. Registra tu primer producto desde el formulario superior.</td></tr>`;
 }
 
+// ============================================
+// FUNCIONES DE EDICIÓN Y AJUSTE DE STOCK
+// ============================================
+function createEditModal() {
+  const modal = document.createElement('div');
+  modal.id = 'editModal';
+  modal.style.cssText = `
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  `;
+  modal.innerHTML = `
+    <div style="
+      background: var(--panel);
+      border: 2px solid var(--gold);
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    ">
+      <h2 style="color: var(--gold); margin-bottom: 20px;">✏️ Editar Producto</h2>
+      <form id="editForm" style="display: grid; gap: 12px;">
+        <input id="editId" type="hidden">
+        <div class="form-group"><label>Nombre *</label><input id="editName" required></div>
+        <div class="form-group"><label>SKU *</label><input id="editSku" required></div>
+        <div class="form-group"><label>Código de barras</label><input id="editBarcode"></div>
+        <div class="form-group"><label>QR</label><input id="editQr"></div>
+        <div class="form-group"><label>Categoría</label>
+          <select id="editCategory">
+            <option>Cabello</option><option>Barba</option>
+            <option>Herramientas</option><option>Tratamientos</option>
+            <option>Equipos</option><option>Accesorios</option>
+            <option>Ceras</option><option>Shampoos</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Marca</label><input id="editBrand"></div>
+        <div class="form-group"><label>Proveedor</label><input id="editProvider"></div>
+        <div class="form-group"><label>Precio compra</label><input id="editBuyPrice" type="number" step="0.01"></div>
+        <div class="form-group"><label>Precio venta</label><input id="editSellPrice" type="number" step="0.01"></div>
+        <div class="form-group"><label>Stock mínimo</label><input id="editMinStock" type="number"></div>
+        <div class="form-group"><label>URL imagen</label><input id="editImage" placeholder="URL de la imagen"></div>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <button type="submit" class="btn-script-main" style="flex:1;">💾 Guardar cambios</button>
+          <button type="button" class="btn-normal" id="closeEditModal" style="flex:1;">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById('closeEditModal').addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  });
+
+  document.getElementById('editForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editId').value;
+    const payload = {
+      name: document.getElementById('editName').value.trim(),
+      sku: document.getElementById('editSku').value.trim().toUpperCase(),
+      barcode: document.getElementById('editBarcode').value.trim() || null,
+      qr_code: document.getElementById('editQr').value.trim() || null,
+      category: document.getElementById('editCategory').value,
+      brand: document.getElementById('editBrand').value.trim() || null,
+      provider: document.getElementById('editProvider').value.trim() || null,
+      purchase_price: Number(document.getElementById('editBuyPrice').value || 0),
+      sale_price: Number(document.getElementById('editSellPrice').value || 0),
+      min_stock: Number(document.getElementById('editMinStock').value || 0),
+      image_url: document.getElementById('editImage').value.trim() || null,
+    };
+
+    try {
+      const response = await fetch(`${API_BASE}/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error al actualizar');
+      }
+      showToast('✅ Producto actualizado correctamente');
+      modal.style.display = 'none';
+      await loadData();
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+}
+
+async function editProduct(productId) {
+  try {
+    const response = await fetch(`${API_BASE}/products/${productId}`);
+    if (!response.ok) throw new Error('Producto no encontrado');
+    const product = await response.json();
+
+    document.getElementById('editId').value = product.id;
+    document.getElementById('editName').value = product.name || '';
+    document.getElementById('editSku').value = product.sku || '';
+    document.getElementById('editBarcode').value = product.barcode || '';
+    document.getElementById('editQr').value = product.qr_code || '';
+    document.getElementById('editCategory').value = product.category || 'Cabello';
+    document.getElementById('editBrand').value = product.brand || '';
+    document.getElementById('editProvider').value = product.provider || '';
+    document.getElementById('editBuyPrice').value = product.purchase_price || 0;
+    document.getElementById('editSellPrice').value = product.sale_price || 0;
+    document.getElementById('editMinStock').value = product.min_stock || 0;
+    document.getElementById('editImage').value = product.image_url || '';
+
+    document.getElementById('editModal').style.display = 'flex';
+  } catch (error) {
+    showToast('Error al cargar el producto: ' + error.message);
+  }
+}
+
+async function adjustStock(productId, branchCode, currentStock) {
+  const newStock = prompt(`Stock actual en ${branchCode}: ${currentStock}\nIngresa el nuevo stock (puede ser negativo para reducir):`, currentStock);
+  if (newStock === null) return;
+
+  const quantity = Number(newStock) - currentStock;
+  if (isNaN(quantity)) {
+    showToast('Cantidad inválida');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/products/${productId}/stock`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        branch_code: branchCode,
+        quantity: quantity,
+        reason: 'Ajuste manual desde inventario',
+        user_name: 'Administrador'
+      }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al ajustar stock');
+    }
+    showToast(`✅ Stock ajustado en ${branchCode}`);
+    await loadData();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+// ============================================
+// BÚSQUEDA EN VENTAS CON IMÁGENES
+// ============================================
+let searchTimeout;
+els.saleSearch.addEventListener('input', function() {
+  clearTimeout(searchTimeout);
+  const term = this.value.trim();
+  if (term.length < 2) {
+    removeSearchResults();
+    return;
+  }
+  searchTimeout = setTimeout(() => performSearch(term), 300);
+});
+
+async function performSearch(term) {
+  try {
+    const response = await fetch(`${API_BASE}/products/search?q=${encodeURIComponent(term)}&limit=10`);
+    if (!response.ok) throw new Error('Error en la búsqueda');
+    const results = await response.json();
+    showSearchResults(results);
+  } catch (error) {
+    console.error('Error en búsqueda:', error);
+  }
+}
+
+function showSearchResults(results) {
+  removeSearchResults();
+
+  if (!results || results.length === 0) {
+    const container = document.createElement('div');
+    container.className = 'search-results';
+    container.style.cssText = `
+      position: absolute;
+      background: var(--panel);
+      border: 1px solid var(--gold);
+      border-radius: 8px;
+      padding: 15px;
+      color: var(--muted);
+      z-index: 1000;
+      min-width: 300px;
+    `;
+    container.textContent = 'No se encontraron productos';
+    const rect = els.saleSearch.getBoundingClientRect();
+    container.style.left = rect.left + 'px';
+    container.style.top = (rect.bottom + 5) + 'px';
+    container.style.width = rect.width + 'px';
+    document.body.appendChild(container);
+    return;
+  }
+
+  const container = document.createElement('div');
+  container.className = 'search-results';
+  container.style.cssText = `
+    position: absolute;
+    background: var(--panel);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    max-height: 350px;
+    overflow-y: auto;
+    z-index: 1000;
+    min-width: 300px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+  `;
+
+  results.forEach(product => {
+    const totalStock = product.total_stock || 0;
+    const item = document.createElement('div');
+    item.style.cssText = `
+      display: flex;
+      align-items: center;
+      padding: 10px 15px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255,215,0,0.1);
+      gap: 12px;
+      transition: background 0.2s;
+    `;
+    item.onmouseover = () => item.style.background = 'rgba(255,215,0,0.1)';
+    item.onmouseout = () => item.style.background = 'transparent';
+
+    const stockColor = totalStock <= 0 ? '#6f241f' : totalStock <= (product.min_stock || 0) ? '#6f5018' : '#1f6d45';
+
+    item.innerHTML = `
+      <img src="${product.image_url || '/placeholder.png'}" 
+           style="width: 45px; height: 45px; object-fit: cover; border-radius: 6px; background: #1a1814;"
+           onerror="this.src='/placeholder.png'">
+      <div style="flex:1;">
+        <div style="font-weight: 600; color: var(--gold-soft);">${product.name}</div>
+        <div style="font-size: 12px; color: var(--muted);">${product.sku}</div>
+        <div style="font-size: 12px; color: var(--gold);">${money.format(product.sale_price)}</div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 12px; color: var(--muted);">Stock total</div>
+        <div style="font-weight: 700; color: ${stockColor};">${totalStock}</div>
+      </div>
+    `;
+    item.addEventListener('click', () => {
+      selectProductForSale(product);
+      container.remove();
+    });
+    container.appendChild(item);
+  });
+
+  const rect = els.saleSearch.getBoundingClientRect();
+  container.style.left = rect.left + 'px';
+  container.style.top = (rect.bottom + 5) + 'px';
+  container.style.width = rect.width + 'px';
+  document.body.appendChild(container);
+}
+
+function selectProductForSale(product) {
+  els.saleSearch.value = product.name;
+  const found = products.find(p => p.id === product.id);
+  if (found) {
+    const priceInput = document.querySelector('#salePrice');
+    if (priceInput) priceInput.value = found.sale_price;
+    const branch = selectedBranch();
+    if (branch !== 'TODAS') {
+      const stock = found.stock?.[branch] || 0;
+      showToast(`📦 Stock en ${branch}: ${stock} unidades`);
+    }
+    // Agregar automáticamente al carrito
+    setTimeout(() => {
+      addToCart();
+    }, 300);
+  }
+}
+
+function removeSearchResults() {
+  const existing = document.querySelector('.search-results');
+  if (existing) existing.remove();
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-results') && !e.target.closest('#saleSearch')) {
+    removeSearchResults();
+  }
+});
+
+// ============================================
+// FILTROS EN INVENTARIO
+// ============================================
+function updateFilters() {
+  const searchBox = document.querySelector('.search-box');
+  if (!searchBox) return;
+  if (document.getElementById('filterCategory')) return;
+
+  const filtersDiv = document.createElement('div');
+  filtersDiv.style.cssText = `
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  `;
+  
+  const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
+  const brands = [...new Set(products.map(p => p.brand).filter(Boolean))];
+
+  filtersDiv.innerHTML = `
+    <select id="filterCategory" style="padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--text);">
+      <option value="">Todas las categorías</option>
+      ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <select id="filterBrand" style="padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--text);">
+      <option value="">Todas las marcas</option>
+      ${brands.map(b => `<option value="${b}">${b}</option>`).join('')}
+    </select>
+    <button id="clearFilters" class="btn-normal" style="padding: 6px 16px;">Limpiar filtros</button>
+  `;
+  searchBox.parentNode.insertBefore(filtersDiv, searchBox.nextSibling);
+
+  document.getElementById('filterCategory').addEventListener('change', renderInventory);
+  document.getElementById('filterBrand').addEventListener('change', renderInventory);
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    document.getElementById('filterCategory').value = '';
+    document.getElementById('filterBrand').value = '';
+    document.getElementById('inventorySearch').value = '';
+    renderInventory();
+  });
+}
+
+// ============================================
+// CARRITO Y VENTAS
+// ============================================
 function addToCart() {
   const branch = selectedBranch();
   if (branch === "TODAS") {
@@ -403,7 +803,15 @@ function showToast(message) {
   }, 3000);
 }
 
+// ============================================
+// INICIALIZACIÓN
+// ============================================
 window.removeFromCart = removeFromCart;
+window.editProduct = editProduct;
+window.adjustStock = adjustStock;
+
+createEditModal();
 setDefaultProductValues();
 loadData();
 setInterval(loadData, 10000);
+

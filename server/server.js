@@ -4,6 +4,15 @@ const cors = require("cors");
 const { Pool } = require("pg");
 require("dotenv").config();
 
+// ============================================
+// NUEVAS RUTAS - IMPORTAR
+// ============================================
+const uploadRoutes = require('./routes/upload');
+const catalogRoutes = require('./routes/catalog');
+const productsRoutes = require('./routes/products'); // <--- NUEVO: tu products.js con edición y ajuste
+
+// ============================================
+
 const app = express();
 const port = Number(process.env.PORT || 3000);
 
@@ -16,6 +25,13 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..")));
 
+// ============================================
+// NUEVO: Servir archivos subidos (imágenes)
+// ============================================
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ============================================
+
 app.get("/api/health", async (_req, res, next) => {
   try {
     await pool.query("SELECT 1");
@@ -25,7 +41,15 @@ app.get("/api/health", async (_req, res, next) => {
   }
 });
 
-app.get("/api/products", async (_req, res, next) => {
+// ============================================
+// RUTAS DE PRODUCTOS - NUEVAS (edición, ajuste, búsqueda)
+// ============================================
+app.use('/api/products', productsRoutes);
+
+// ============================================
+// RUTAS DE PRODUCTOS - LEGACY (tus rutas originales, renombradas)
+// ============================================
+app.get("/api/products-legacy", async (_req, res, next) => {
   try {
     const { rows } = await pool.query(`
       SELECT
@@ -71,7 +95,7 @@ app.get("/api/products", async (_req, res, next) => {
   }
 });
 
-app.post("/api/products", async (req, res, next) => {
+app.post("/api/products-legacy", async (req, res, next) => {
   const client = await pool.connect();
   try {
     const {
@@ -135,6 +159,10 @@ app.post("/api/products", async (req, res, next) => {
     client.release();
   }
 });
+
+// ============================================
+// RESTO DE RUTAS (ventas, movimientos, devoluciones) - SIN CAMBIOS
+// ============================================
 
 app.get("/api/sales", async (_req, res, next) => {
   try {
@@ -307,6 +335,23 @@ app.post("/api/returns", async (req, res, next) => {
     client.release();
   }
 });
+
+// ============================================
+// NUEVAS RUTAS - IMÁGENES Y CATÁLOGO
+// ============================================
+
+// Ruta para subir imágenes de productos
+app.use('/api/upload', uploadRoutes);
+
+// Ruta para generar y descargar catálogo
+app.use('/api/catalog', catalogRoutes);
+
+// Ruta para el catálogo público (HTML)
+app.get('/catalog', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'catalog', 'index.html'));
+});
+
+// ============================================
 
 async function createSaleNumber(client) {
   const { rows } = await client.query("SELECT COUNT(*) + 1 AS next_number FROM sales");
