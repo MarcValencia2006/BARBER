@@ -340,6 +340,8 @@ function createEditModal() {
       <h2 style="color: var(--gold); margin-bottom: 20px;">✏️ Editar Producto</h2>
       <form id="editForm" style="display: grid; gap: 12px;">
         <input id="editId" type="hidden">
+        <!-- Campo oculto para guardar la URL actual de la imagen -->
+        <input id="editCurrentImageUrl" type="hidden">
         <div class="form-group"><label>Nombre *</label><input id="editName" required></div>
         <div class="form-group"><label>SKU *</label><input id="editSku" required></div>
         <div class="form-group"><label>Código de barras</label><input id="editBarcode"></div>
@@ -357,14 +359,13 @@ function createEditModal() {
         <div class="form-group"><label>Precio compra</label><input id="editBuyPrice" type="number" step="0.01"></div>
         <div class="form-group"><label>Precio venta</label><input id="editSellPrice" type="number" step="0.01"></div>
         <div class="form-group"><label>Stock mínimo</label><input id="editMinStock" type="number"></div>
-        <!-- CAMPO DE IMAGEN CON ARCHIVO (reemplaza al de URL) -->
         <div class="form-group" style="grid-column: span 2;">
           <label>Imagen del producto</label>
           <input type="file" id="editImageFile" accept="image/*">
           <div id="editImagePreview" style="margin-top: 8px; display: none;">
             <img id="editPreviewImg" src="" alt="Vista previa" style="max-width: 150px; border-radius: 8px; border: 2px solid var(--gold);">
           </div>
-          <small style="color: var(--muted);">Puedes subir una nueva imagen o dejar la actual (se mantendrá si no seleccionas nada).</small>
+          <small style="color: var(--muted);">Selecciona una imagen para reemplazar la actual (opcional).</small>
         </div>
         <div style="display: flex; gap: 10px; margin-top: 10px;">
           <button type="submit" class="btn-script-main" style="flex:1;">💾 Guardar cambios</button>
@@ -401,8 +402,10 @@ function createEditModal() {
     e.preventDefault();
     const id = document.getElementById('editId').value;
     const imageFile = document.getElementById('editImageFile').files[0];
+    // Recuperar la URL actual de la imagen (guardada al abrir el modal)
+    const currentImageUrl = document.getElementById('editCurrentImageUrl').value || null;
 
-    // Primero actualizar los datos del producto (sin imagen)
+    // Preparar datos base del producto
     const payload = {
       name: document.getElementById('editName').value.trim(),
       sku: document.getElementById('editSku').value.trim().toUpperCase(),
@@ -416,19 +419,11 @@ function createEditModal() {
       min_stock: Number(document.getElementById('editMinStock').value || 0),
     };
 
-    try {
-      // 1. Actualizar datos del producto
-      const response = await fetch(`${API_BASE}/products/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al actualizar');
-      }
+    // Inicialmente, la imagen será la actual (o null si no hay)
+    let finalImageUrl = currentImageUrl;
 
-      // 2. Si hay imagen, subirla
+    try {
+      // 1. Si se seleccionó una nueva imagen, subirla primero
       if (imageFile) {
         const formData = new FormData();
         formData.append('product_id', id);
@@ -439,15 +434,32 @@ function createEditModal() {
         });
         if (!uploadRes.ok) {
           const err = await uploadRes.json();
-          throw new Error(err.error || 'Error al subir la imagen');
+          throw new Error('Error al subir la imagen: ' + (err.error || ''));
         }
+        const uploadData = await uploadRes.json();
+        finalImageUrl = uploadData.image_url; // URL generada por Supabase
+      }
+
+      // 2. Agregar image_url al payload (obligatorio para el backend)
+      payload.image_url = finalImageUrl;
+
+      // 3. Actualizar el producto con todos los datos (incluyendo image_url)
+      const response = await fetch(`${API_BASE}/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error al actualizar el producto');
       }
 
       showToast('✅ Producto actualizado correctamente');
       modal.style.display = 'none';
       await loadData();
     } catch (error) {
-      showToast(error.message);
+      console.error('Error en edición:', error);
+      showToast('❌ ' + error.message);
     }
   });
 }
