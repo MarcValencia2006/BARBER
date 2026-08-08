@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Barber Stock</title>
+  <title>ARMERIA BARBER</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
@@ -14,8 +14,8 @@
     <header class="header">
       <div class="logo-area">
         <div>
-          <h1>Barber Stock</h1>
-          <p>Sistema de inventario y ventas</p>
+          <h1>ARMERIA BARBER</h1>
+          <p>Sistema profesional de inventario y ventas multi‑sucursal</p>
         </div>
         <span class="gold-badge">Modo producción</span>
       </div>
@@ -44,7 +44,7 @@
     </header>
 
     <main>
-      <!-- DASHBOARD -->
+      <!-- ========== DASHBOARD ========== -->
       <section class="view active" id="dashboard">
         <div class="metric-grid">
           <article class="metric">
@@ -52,12 +52,12 @@
             <strong id="metricValue">Bs 0.00</strong>
           </article>
           <article class="metric">
-            <span>Total productos</span>
-            <strong id="metricTotalProducts">0</strong>
+            <span>Productos bajos</span>
+            <strong id="metricLow">0</strong>
           </article>
           <article class="metric">
-            <span>Ventas hoy</span>
-            <strong id="metricSalesToday">0</strong>
+            <span>Productos agotados</span>
+            <strong id="metricOut">0</strong>
           </article>
           <article class="metric">
             <span>Ganancia aprox.</span>
@@ -67,8 +67,19 @@
 
         <section class="card">
           <div class="card-header">
-            <span>Catálogo de productos</span>
+            <span>Resumen por sucursal</span>
             <button class="btn-normal" id="refreshBtn">Actualizar</button>
+          </div>
+          <div class="card-body">
+            <div class="branch-grid" id="branchSummary"></div>
+          </div>
+        </section>
+
+        <!-- NUEVO: Catálogo en el panel principal -->
+        <section class="card">
+          <div class="card-header">
+            <span>Catálogo de productos</span>
+            <span class="header-note">Todos los productos disponibles</span>
           </div>
           <div class="card-body">
             <div class="catalog-grid" id="catalogGrid"></div>
@@ -76,7 +87,7 @@
         </section>
       </section>
 
-      <!-- INVENTARIO -->
+      <!-- ========== INVENTARIO ========== -->
       <section class="view" id="inventario">
         <section class="card">
           <div class="card-header">
@@ -84,7 +95,7 @@
             <span class="header-note">Altas rápidas y stock por sucursal</span>
           </div>
           <div class="card-body">
-            <form class="form-grid" id="productForm" enctype="multipart/form-data">
+            <form class="form-grid" id="productForm">
               <div class="form-group">
                 <label for="productName">Producto</label>
                 <input id="productName" required placeholder="Pomada premium">
@@ -108,10 +119,6 @@
                   <option>Barba</option>
                   <option>Herramientas</option>
                   <option>Tratamientos</option>
-                  <option>Equipos</option>
-                  <option>Accesorios</option>
-                  <option>Ceras</option>
-                  <option>Shampoos</option>
                 </select>
               </div>
               <div class="form-group">
@@ -139,7 +146,7 @@
                 <input id="initialStock" type="number" min="0" required value="10">
               </div>
               <div class="form-group" style="grid-column: span 2;">
-                <label for="productImage">Imagen</label>
+                <label for="productImage">Imagen del producto</label>
                 <input id="productImage" type="file" accept="image/*">
                 <div id="imagePreview" style="margin-top: 10px; display: none;">
                   <img id="previewImg" src="" alt="Vista previa" style="max-width: 150px; border-radius: 8px; border: 2px solid var(--gold);">
@@ -181,7 +188,7 @@
         </section>
       </section>
 
-      <!-- VENTAS SIMPLIFICADA -->
+      <!-- ========== VENTAS SIMPLIFICADA ========== -->
       <section class="view" id="ventas">
         <div class="sales-layout">
           <section class="card">
@@ -190,7 +197,8 @@
               <span class="header-note">Busca, ajusta precio y confirma</span>
             </div>
             <div class="card-body">
-              <div class="form-grid compact" style="grid-template-columns: 1fr 100px 120px auto;">
+              <!-- Fila de búsqueda y cantidad -->
+              <div class="form-grid" style="grid-template-columns: 1fr 100px 120px auto;">
                 <div class="form-group wide">
                   <label for="saleSearch">Producto</label>
                   <input id="saleSearch" placeholder="Nombre, SKU, código...">
@@ -206,10 +214,7 @@
                 <button class="btn-script-main" id="addToCart" type="button">Agregar</button>
               </div>
 
-              <div style="margin-top: 10px;">
-                <input id="saleObservations" placeholder="Detalles adicionales (opcional)" style="width:100%; padding:8px; border-radius:8px; background:#1e1c18; border:1px solid var(--line); color:#fff3df;">
-              </div>
-
+              <!-- Carrito -->
               <div class="table-wrapper cart-table">
                 <table>
                   <thead>
@@ -225,6 +230,12 @@
                 </table>
               </div>
 
+              <!-- Observaciones (opcional) -->
+              <div style="margin-top: 12px;">
+                <input id="saleObservations" placeholder="Detalles adicionales (opcional)" style="width:100%; padding:8px; border-radius:8px; background:#1e1c18; border:1px solid var(--line); color:#fff3df;">
+              </div>
+
+              <!-- Total y botón confirmar -->
               <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 12px;">
                 <div style="display: flex; gap: 20px; align-items: baseline;">
                   <span style="color: var(--muted);">Subtotal: <strong id="subtotalText" style="color: var(--gold-soft);">Bs 0.00</strong></span>
@@ -236,6 +247,7 @@
           </section>
         </div>
 
+        <!-- Historial de ventas (sin cambios) -->
         <section class="card">
           <div class="card-header">
             <span>Historial de ventas</span>
@@ -261,7 +273,7 @@
         </section>
       </section>
 
-      <!-- MOVIMIENTOS -->
+      <!-- ========== MOVIMIENTOS ========== -->
       <section class="view" id="movimientos">
         <section class="card">
           <div class="card-header">

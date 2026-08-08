@@ -14,9 +14,11 @@ const els = {
   chipStock: document.querySelector("#chipStock"),
   chipVentas: document.querySelector("#chipVentas"),
   metricValue: document.querySelector("#metricValue"),
-  metricTotalProducts: document.querySelector("#metricTotalProducts"),
-  metricSalesToday: document.querySelector("#metricSalesToday"),
+  metricLow: document.querySelector("#metricLow"),
+  metricOut: document.querySelector("#metricOut"),
   metricProfit: document.querySelector("#metricProfit"),
+  branchSummary: document.querySelector("#branchSummary"),
+  // Ya no usamos alertRows, lo reemplazamos por catalogGrid
   catalogGrid: document.querySelector("#catalogGrid"),
   productForm: document.querySelector("#productForm"),
   inventorySearch: document.querySelector("#inventorySearch"),
@@ -184,7 +186,8 @@ function visibleProducts() {
 
 function render() {
   renderMetrics();
-  renderCatalog();
+  renderBranches();
+  renderCatalog();        // Reemplaza a renderAlerts()
   renderInventory();
   renderCart();
   renderSales();
@@ -198,33 +201,78 @@ function renderMetrics() {
   const todaySales = sales.filter((sale) => String(sale.sale_date).startsWith(today));
   const revenue = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
   const profit = todaySales.reduce((sum, sale) => sum + Number(sale.estimated_profit || 0), 0);
+  // Calculamos bajos y agotados para las métricas (aunque ya no se muestre la tabla)
+  const alerts = getAlerts();
 
   els.chipStock.textContent = stock;
   els.chipVentas.textContent = money.format(revenue);
   els.metricValue.textContent = money.format(value);
-  els.metricTotalProducts.textContent = products.length;
-  els.metricSalesToday.textContent = todaySales.length;
+  els.metricLow.textContent = alerts.filter((item) => item.status === "Bajo").length;
+  els.metricOut.textContent = alerts.filter((item) => item.status === "Agotado").length;
   els.metricProfit.textContent = money.format(profit);
 }
 
+function renderBranches() {
+  els.branchSummary.innerHTML = BRANCHES.map((branch) => {
+    const stock = products.reduce((sum, product) => sum + Number(product.stock[branch] || 0), 0);
+    const value = products.reduce((sum, product) => sum + Number(product.stock[branch] || 0) * Number(product.sale_price), 0);
+    const branchSales = sales.filter((sale) => sale.branch_code === branch).reduce((sum, sale) => sum + Number(sale.total), 0);
+    return `
+      <article class="branch-card">
+        <h3>${branch}</h3>
+        <p><span>Stock</span><strong>${stock}</strong></p>
+        <p><span>Valor</span><strong>${money.format(value)}</strong></p>
+        <p><span>Ventas</span><strong>${money.format(branchSales)}</strong></p>
+      </article>
+    `;
+  }).join("");
+}
+
+// Función auxiliar para alertas (solo para métricas)
+function getAlerts() {
+  return products.flatMap((product) =>
+    BRANCHES.map((branch) => {
+      const stock = Number(product.stock[branch] || 0);
+      return {
+        product,
+        branch,
+        stock,
+        min: Number(product.min_stock || 0),
+        status: stock === 0 ? "Agotado" : stock <= Number(product.min_stock || 0) ? "Bajo" : "OK",
+      };
+    })
+  ).filter((item) => item.status !== "OK" && (selectedBranch() === "TODAS" || item.branch === selectedBranch()));
+}
+
+// ============================================
+// CATÁLOGO EN DASHBOARD (nuevo)
+// ============================================
 function renderCatalog() {
   const grid = els.catalogGrid;
-  if (!products || products.length === 0) {
-    grid.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 20px;">No hay productos registrados.</p>';
+  if (!grid) return;
+
+  // Mostrar todos los productos (sin filtrar por sucursal, o podemos filtrar según selección)
+  const catalogProducts = selectedBranch() === "TODAS"
+    ? products
+    : products.filter(p => productStock(p) > 0);
+
+  if (!catalogProducts.length) {
+    grid.innerHTML = `<p style="color: var(--muted); text-align:center; padding:20px;">No hay productos disponibles.</p>`;
     return;
   }
-  grid.innerHTML = products.map(p => {
-    const total = BRANCHES.reduce((sum, branch) => sum + Number(p.stock[branch] || 0), 0);
+
+  grid.innerHTML = catalogProducts.map(p => {
+    const totalStock = BRANCHES.reduce((sum, b) => sum + Number(p.stock[b] || 0), 0);
     return `
       <div class="catalog-item">
         <img src="${p.image_url || '/placeholder.png'}" 
              alt="${p.name}"
-             onerror="this.src='/placeholder.png'"
-             style="width:100%; height:150px; object-fit:cover; border-radius:8px; background:#1a1814;">
-        <h4 style="color: var(--gold-soft); margin: 8px 0 4px;">${p.name}</h4>
-        <div style="font-size:12px; color: var(--muted);">${p.sku}</div>
-        <div style="color: var(--gold); font-weight: bold;">${money.format(p.sale_price)}</div>
-        <div style="font-size:12px; color: var(--muted);">Stock: ${total}</div>
+             style="width:100%; height:140px; object-fit:cover; border-radius:6px; background:#1a1814;"
+             onerror="this.src='/placeholder.png'">
+        <h4 style="margin:8px 0 4px; color: var(--gold-soft);">${p.name}</h4>
+        <div style="font-size:0.8rem; color: var(--muted);">${p.sku}</div>
+        <div style="font-weight:bold; color: var(--gold);">${money.format(p.sale_price)}</div>
+        <div style="font-size:0.8rem; color: var(--muted);">Stock: ${totalStock}</div>
       </div>
     `;
   }).join('');
@@ -263,7 +311,7 @@ function renderInventory() {
         </tr>
       `;
     }).join("")
-    : `<tr><td colspan="${BRANCHES.length + 5}">Inventario vacío.</td></tr>`;
+    : `<tr><td colspan="${BRANCHES.length + 5}">Inventario vacío. Registra tu primer producto desde el formulario superior.</td></tr>`;
 }
 
 // ============================================
@@ -283,7 +331,16 @@ function createEditModal() {
     align-items: center;
   `;
   modal.innerHTML = `
-    <div style="background: var(--panel); border: 2px solid var(--gold); border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+    <div style="
+      background: var(--panel);
+      border: 2px solid var(--gold);
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    ">
       <h2 style="color: var(--gold); margin-bottom: 20px;">✏️ Editar Producto</h2>
       <form id="editForm" style="display: grid; gap: 12px;">
         <input id="editId" type="hidden">
@@ -383,7 +440,7 @@ async function editProduct(productId) {
 }
 
 async function adjustStock(productId, branchCode, currentStock) {
-  const newStock = prompt(`Stock actual en ${branchCode}: ${currentStock}\nIngresa el nuevo stock:`, currentStock);
+  const newStock = prompt(`Stock actual en ${branchCode}: ${currentStock}\nIngresa el nuevo stock (puede ser negativo para reducir):`, currentStock);
   if (newStock === null) return;
 
   const quantity = Number(newStock) - currentStock;
@@ -415,7 +472,7 @@ async function adjustStock(productId, branchCode, currentStock) {
 }
 
 // ============================================
-// BÚSQUEDA EN VENTAS CON IMÁGENES
+// BÚSQUEDA EN VENTAS CON IMÁGENES (sin cambios)
 // ============================================
 let searchTimeout;
 els.saleSearch.addEventListener('input', function() {
@@ -529,12 +586,13 @@ function selectProductForSale(product) {
   if (found) {
     const priceInput = document.querySelector('#salePrice');
     if (priceInput) priceInput.value = found.sale_price;
-    const branch = selectedBranch();
-    if (branch !== 'TODAS') {
-      const stock = found.stock?.[branch] || 0;
-      showToast(`📦 Stock en ${branch}: ${stock} unidades`);
-    }
-    // No auto-agregamos, el usuario debe hacer clic en "Agregar" o ya está
+    // Mostrar stock en TIENDA (solo informativo)
+    const stock = found.stock?.TIENDA || 0;
+    showToast(`📦 Stock en TIENDA: ${stock} unidades`);
+    // Agregar automáticamente al carrito
+    setTimeout(() => {
+      addToCart();
+    }, 300);
   }
 }
 
@@ -595,7 +653,7 @@ function updateFilters() {
 // CARRITO Y VENTAS (SIMPLIFICADO)
 // ============================================
 function addToCart() {
-  // Siempre se usa TIENDA como sucursal para ventas (fijo)
+  // Siempre usa TIENDA para verificar stock
   const branch = "TIENDA";
 
   const term = els.saleSearch.value.trim().toLowerCase();
@@ -615,8 +673,11 @@ function addToCart() {
     return;
   }
 
-  const overrideValue = els.salePrice.value;
+  const overrideValue = document.querySelector("#salePrice").value;
   const appliedPrice = overrideValue === "" ? Number(product.sale_price) : Number(overrideValue);
+  // Si cambia el precio, no pedimos motivo ni autorización (se simplifica)
+  // pero guardamos el cambio de precio como observación en el ítem si se desea
+  const priceWasChanged = appliedPrice !== Number(product.sale_price);
 
   const existing = cart.find((item) => item.product_id === product.id);
   if (existing) existing.quantity += qty;
@@ -628,12 +689,14 @@ function addToCart() {
       quantity: qty,
       unit_price: appliedPrice,
       original_price: Number(product.sale_price),
+      price_change_reason: priceWasChanged ? "Ajuste manual" : null,
+      authorized_by: priceWasChanged ? "Sistema" : null,
     });
   }
 
   els.saleSearch.value = "";
   els.saleQty.value = 1;
-  els.salePrice.value = "";
+  document.querySelector("#salePrice").value = "";
   renderCart();
 }
 
@@ -651,6 +714,7 @@ function renderCart() {
     : `<tr><td colspan="5">Agrega productos para iniciar la venta.</td></tr>`;
 
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+  // Sin descuento
   els.subtotalText.textContent = money.format(subtotal);
   els.totalText.textContent = money.format(subtotal);
 }
@@ -661,7 +725,8 @@ function removeFromCart(id) {
 }
 
 async function confirmSale() {
-  const branch = "TIENDA"; // fijo
+  // Siempre usa TIENDA
+  const branch = "TIENDA";
 
   if (!cart.length) {
     showToast("El carrito está vacío");
@@ -669,6 +734,7 @@ async function confirmSale() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+  const discount = 0;
   const observations = els.saleObservations?.value?.trim() || null;
 
   try {
@@ -679,14 +745,14 @@ async function confirmSale() {
         seller_name: "Sistema",
         customer_name: null,
         payment_method: "Efectivo",
-        discount: 0,
-        observations: observations,
+        discount,
+        observations,
         items: cart,
       }),
     });
 
     cart = [];
-    els.saleObservations.value = "";
+    els.saleObservations.value = '';
     showToast("✅ Venta confirmada y stock descontado");
     await loadData();
   } catch (error) {
@@ -694,9 +760,6 @@ async function confirmSale() {
   }
 }
 
-// ============================================
-// HISTORIAL Y MOVIMIENTOS
-// ============================================
 function renderSales() {
   els.salesRows.innerHTML = sales.length
     ? sales.map((sale) => `
@@ -704,12 +767,13 @@ function renderSales() {
         <td>${sale.sale_number}</td>
         <td>${formatDate(sale.sale_date)}</td>
         <td>${sale.branch_code}</td>
+        <td>${sale.seller_name}</td>
         <td>${money.format(sale.total)}</td>
         <td>${sale.payment_method}</td>
         <td><span class="badge good">${sale.status}</span></td>
       </tr>
     `).join("")
-    : `<tr><td colspan="6">Todavía no hay ventas registradas.</td></tr>`;
+    : `<tr><td colspan="7">Todavía no hay ventas registradas.</td></tr>`;
 }
 
 function renderMovements() {
@@ -747,6 +811,33 @@ function showToast(message) {
 window.removeFromCart = removeFromCart;
 window.editProduct = editProduct;
 window.adjustStock = adjustStock;
+
+// Agregar estilos para el catálogo en el dashboard (si no existen en styles.css)
+const styleCatalog = document.createElement('style');
+styleCatalog.textContent = `
+  .catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+  }
+  .catalog-item {
+    background: var(--panel-2);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    transition: transform 0.2s;
+  }
+  .catalog-item:hover {
+    transform: translateY(-3px);
+    border-color: var(--gold);
+  }
+  .catalog-item h4 {
+    font-size: 0.95rem;
+    margin: 6px 0 2px;
+  }
+`;
+document.head.appendChild(styleCatalog);
 
 createEditModal();
 setDefaultProductValues();
