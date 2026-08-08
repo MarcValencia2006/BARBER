@@ -14,23 +14,19 @@ const els = {
   chipStock: document.querySelector("#chipStock"),
   chipVentas: document.querySelector("#chipVentas"),
   metricValue: document.querySelector("#metricValue"),
-  metricLow: document.querySelector("#metricLow"),
-  metricOut: document.querySelector("#metricOut"),
+  metricTotalProducts: document.querySelector("#metricTotalProducts"),
+  metricSalesToday: document.querySelector("#metricSalesToday"),
   metricProfit: document.querySelector("#metricProfit"),
-  branchSummary: document.querySelector("#branchSummary"),
-  alertRows: document.querySelector("#alertRows"),
+  catalogGrid: document.querySelector("#catalogGrid"),
   productForm: document.querySelector("#productForm"),
   inventorySearch: document.querySelector("#inventorySearch"),
   inventoryRows: document.querySelector("#inventoryRows"),
   saleSearch: document.querySelector("#saleSearch"),
   saleQty: document.querySelector("#saleQty"),
+  salePrice: document.querySelector("#salePrice"),
+  saleObservations: document.querySelector("#saleObservations"),
   cartRows: document.querySelector("#cartRows"),
-  sellerName: document.querySelector("#sellerName"),
-  customerName: document.querySelector("#customerName"),
-  paymentMethod: document.querySelector("#paymentMethod"),
-  discountInput: document.querySelector("#discountInput"),
   subtotalText: document.querySelector("#subtotalText"),
-  discountText: document.querySelector("#discountText"),
   totalText: document.querySelector("#totalText"),
   salesRows: document.querySelector("#salesRows"),
   movementRows: document.querySelector("#movementRows"),
@@ -52,7 +48,6 @@ document.querySelector("#addToCart").addEventListener("click", addToCart);
 document.querySelector("#confirmSale").addEventListener("click", confirmSale);
 els.branchSelect.addEventListener("change", render);
 els.inventorySearch.addEventListener("input", renderInventory);
-els.discountInput.addEventListener("input", renderCart);
 
 // ============================================
 // FORMULARIO DE PRODUCTO CON IMAGEN
@@ -189,8 +184,7 @@ function visibleProducts() {
 
 function render() {
   renderMetrics();
-  renderBranches();
-  renderAlerts();
+  renderCatalog();
   renderInventory();
   renderCart();
   renderSales();
@@ -204,61 +198,36 @@ function renderMetrics() {
   const todaySales = sales.filter((sale) => String(sale.sale_date).startsWith(today));
   const revenue = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
   const profit = todaySales.reduce((sum, sale) => sum + Number(sale.estimated_profit || 0), 0);
-  const alerts = getAlerts();
 
   els.chipStock.textContent = stock;
   els.chipVentas.textContent = money.format(revenue);
   els.metricValue.textContent = money.format(value);
-  els.metricLow.textContent = alerts.filter((item) => item.status === "Bajo").length;
-  els.metricOut.textContent = alerts.filter((item) => item.status === "Agotado").length;
+  els.metricTotalProducts.textContent = products.length;
+  els.metricSalesToday.textContent = todaySales.length;
   els.metricProfit.textContent = money.format(profit);
 }
 
-function renderBranches() {
-  els.branchSummary.innerHTML = BRANCHES.map((branch) => {
-    const stock = products.reduce((sum, product) => sum + Number(product.stock[branch] || 0), 0);
-    const value = products.reduce((sum, product) => sum + Number(product.stock[branch] || 0) * Number(product.sale_price), 0);
-    const branchSales = sales.filter((sale) => sale.branch_code === branch).reduce((sum, sale) => sum + Number(sale.total), 0);
+function renderCatalog() {
+  const grid = els.catalogGrid;
+  if (!products || products.length === 0) {
+    grid.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 20px;">No hay productos registrados.</p>';
+    return;
+  }
+  grid.innerHTML = products.map(p => {
+    const total = BRANCHES.reduce((sum, branch) => sum + Number(p.stock[branch] || 0), 0);
     return `
-      <article class="branch-card">
-        <h3>${branch}</h3>
-        <p><span>Stock</span><strong>${stock}</strong></p>
-        <p><span>Valor</span><strong>${money.format(value)}</strong></p>
-        <p><span>Ventas</span><strong>${money.format(branchSales)}</strong></p>
-      </article>
+      <div class="catalog-item">
+        <img src="${p.image_url || '/placeholder.png'}" 
+             alt="${p.name}"
+             onerror="this.src='/placeholder.png'"
+             style="width:100%; height:150px; object-fit:cover; border-radius:8px; background:#1a1814;">
+        <h4 style="color: var(--gold-soft); margin: 8px 0 4px;">${p.name}</h4>
+        <div style="font-size:12px; color: var(--muted);">${p.sku}</div>
+        <div style="color: var(--gold); font-weight: bold;">${money.format(p.sale_price)}</div>
+        <div style="font-size:12px; color: var(--muted);">Stock: ${total}</div>
+      </div>
     `;
-  }).join("");
-}
-
-function getAlerts() {
-  return products.flatMap((product) =>
-    BRANCHES.map((branch) => {
-      const stock = Number(product.stock[branch] || 0);
-      return {
-        product,
-        branch,
-        stock,
-        min: Number(product.min_stock || 0),
-        status: stock === 0 ? "Agotado" : stock <= Number(product.min_stock || 0) ? "Bajo" : "OK",
-      };
-    })
-  ).filter((item) => item.status !== "OK" && (selectedBranch() === "TODAS" || item.branch === selectedBranch()));
-}
-
-function renderAlerts() {
-  const alerts = getAlerts();
-  els.alertRows.innerHTML = alerts.length
-    ? alerts.map((item) => `
-      <tr>
-        <td>${item.product.name}</td>
-        <td>${item.product.sku}</td>
-        <td>${item.branch}</td>
-        <td>${item.stock}</td>
-        <td>${item.min}</td>
-        <td><span class="badge ${item.status === "Agotado" ? "bad" : "warn"}">${item.status}</span></td>
-      </tr>
-    `).join("")
-    : `<tr><td colspan="6">No hay alertas. Cuando cargues productos con stock bajo aparecerán aquí.</td></tr>`;
+  }).join('');
 }
 
 // ============================================
@@ -294,7 +263,7 @@ function renderInventory() {
         </tr>
       `;
     }).join("")
-    : `<tr><td colspan="${BRANCHES.length + 5}">Inventario vacío. Registra tu primer producto desde el formulario superior.</td></tr>`;
+    : `<tr><td colspan="${BRANCHES.length + 5}">Inventario vacío.</td></tr>`;
 }
 
 // ============================================
@@ -314,16 +283,7 @@ function createEditModal() {
     align-items: center;
   `;
   modal.innerHTML = `
-    <div style="
-      background: var(--panel);
-      border: 2px solid var(--gold);
-      border-radius: 12px;
-      padding: 30px;
-      max-width: 600px;
-      width: 90%;
-      max-height: 90vh;
-      overflow-y: auto;
-    ">
+    <div style="background: var(--panel); border: 2px solid var(--gold); border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
       <h2 style="color: var(--gold); margin-bottom: 20px;">✏️ Editar Producto</h2>
       <form id="editForm" style="display: grid; gap: 12px;">
         <input id="editId" type="hidden">
@@ -423,7 +383,7 @@ async function editProduct(productId) {
 }
 
 async function adjustStock(productId, branchCode, currentStock) {
-  const newStock = prompt(`Stock actual en ${branchCode}: ${currentStock}\nIngresa el nuevo stock (puede ser negativo para reducir):`, currentStock);
+  const newStock = prompt(`Stock actual en ${branchCode}: ${currentStock}\nIngresa el nuevo stock:`, currentStock);
   if (newStock === null) return;
 
   const quantity = Number(newStock) - currentStock;
@@ -574,10 +534,7 @@ function selectProductForSale(product) {
       const stock = found.stock?.[branch] || 0;
       showToast(`📦 Stock en ${branch}: ${stock} unidades`);
     }
-    // Agregar automáticamente al carrito
-    setTimeout(() => {
-      addToCart();
-    }, 300);
+    // No auto-agregamos, el usuario debe hacer clic en "Agregar" o ya está
   }
 }
 
@@ -635,14 +592,11 @@ function updateFilters() {
 }
 
 // ============================================
-// CARRITO Y VENTAS
+// CARRITO Y VENTAS (SIMPLIFICADO)
 // ============================================
 function addToCart() {
-  const branch = selectedBranch();
-  if (branch === "TODAS") {
-    showToast("Selecciona una sucursal para vender");
-    return;
-  }
+  // Siempre se usa TIENDA como sucursal para ventas (fijo)
+  const branch = "TIENDA";
 
   const term = els.saleSearch.value.trim().toLowerCase();
   const qty = Number(els.saleQty.value || 1);
@@ -657,20 +611,12 @@ function addToCart() {
 
   const currentQty = cart.find((item) => item.product_id === product.id)?.quantity || 0;
   if (Number(product.stock[branch] || 0) < currentQty + qty) {
-    showToast("Stock insuficiente en la sucursal");
+    showToast("Stock insuficiente en TIENDA");
     return;
   }
 
-  const overrideValue = document.querySelector("#salePrice").value;
+  const overrideValue = els.salePrice.value;
   const appliedPrice = overrideValue === "" ? Number(product.sale_price) : Number(overrideValue);
-  const priceWasChanged = appliedPrice !== Number(product.sale_price);
-  const reason = document.querySelector("#priceReason").value.trim();
-  const authorizedBy = document.querySelector("#authorizedBy").value.trim();
-
-  if (priceWasChanged && (!reason || !authorizedBy)) {
-    showToast("Indica motivo y usuario que autoriza el cambio de precio");
-    return;
-  }
 
   const existing = cart.find((item) => item.product_id === product.id);
   if (existing) existing.quantity += qty;
@@ -682,16 +628,12 @@ function addToCart() {
       quantity: qty,
       unit_price: appliedPrice,
       original_price: Number(product.sale_price),
-      price_change_reason: priceWasChanged ? reason : null,
-      authorized_by: priceWasChanged ? authorizedBy : null,
     });
   }
 
   els.saleSearch.value = "";
   els.saleQty.value = 1;
-  document.querySelector("#salePrice").value = "";
-  document.querySelector("#priceReason").value = "";
-  document.querySelector("#authorizedBy").value = "";
+  els.salePrice.value = "";
   renderCart();
 }
 
@@ -709,10 +651,8 @@ function renderCart() {
     : `<tr><td colspan="5">Agrega productos para iniciar la venta.</td></tr>`;
 
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
-  const discount = Math.min(Number(els.discountInput.value || 0), subtotal);
   els.subtotalText.textContent = money.format(subtotal);
-  els.discountText.textContent = money.format(discount);
-  els.totalText.textContent = money.format(subtotal - discount);
+  els.totalText.textContent = money.format(subtotal);
 }
 
 function removeFromCart(id) {
@@ -721,11 +661,7 @@ function removeFromCart(id) {
 }
 
 async function confirmSale() {
-  const branch = selectedBranch();
-  if (branch === "TODAS") {
-    showToast("Selecciona una sucursal para confirmar");
-    return;
-  }
+  const branch = "TIENDA"; // fijo
 
   if (!cart.length) {
     showToast("El carrito está vacío");
@@ -733,31 +669,34 @@ async function confirmSale() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
-  const discount = Math.min(Number(els.discountInput.value || 0), subtotal);
+  const observations = els.saleObservations?.value?.trim() || null;
 
   try {
     await request("/sales", {
       method: "POST",
       body: JSON.stringify({
         branch_code: branch,
-        seller_name: els.sellerName.value || "Vendedor",
-        customer_name: els.customerName.value || null,
-        payment_method: els.paymentMethod.value,
-        discount,
-        observations: "",
+        seller_name: "Sistema",
+        customer_name: null,
+        payment_method: "Efectivo",
+        discount: 0,
+        observations: observations,
         items: cart,
       }),
     });
 
     cart = [];
-    els.discountInput.value = 0;
-    showToast("Venta confirmada y stock descontado");
+    els.saleObservations.value = "";
+    showToast("✅ Venta confirmada y stock descontado");
     await loadData();
   } catch (error) {
     showToast(error.message);
   }
 }
 
+// ============================================
+// HISTORIAL Y MOVIMIENTOS
+// ============================================
 function renderSales() {
   els.salesRows.innerHTML = sales.length
     ? sales.map((sale) => `
@@ -765,13 +704,12 @@ function renderSales() {
         <td>${sale.sale_number}</td>
         <td>${formatDate(sale.sale_date)}</td>
         <td>${sale.branch_code}</td>
-        <td>${sale.seller_name}</td>
         <td>${money.format(sale.total)}</td>
         <td>${sale.payment_method}</td>
         <td><span class="badge good">${sale.status}</span></td>
       </tr>
     `).join("")
-    : `<tr><td colspan="7">Todavía no hay ventas registradas.</td></tr>`;
+    : `<tr><td colspan="6">Todavía no hay ventas registradas.</td></tr>`;
 }
 
 function renderMovements() {
@@ -814,4 +752,3 @@ createEditModal();
 setDefaultProductValues();
 loadData();
 setInterval(loadData, 10000);
-

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inventario Premium Multi-Sucursal</title>
+  <title>Barber Stock</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
       <div class="logo-area">
         <div>
           <h1>Barber Stock</h1>
-          <p>Sistema profesional de inventario y ventas multi-sucursal</p>
+          <p>Sistema de inventario y ventas</p>
         </div>
         <span class="gold-badge">Modo producción</span>
       </div>
@@ -37,13 +37,14 @@
             <option value="PUCARANI">PUCARANI</option>
             <option value="UPEA">UPEA</option>
             <option value="BALLIVIAN">BALLIVIAN</option>
-            <option value="TIENDA">TIENDA</option>
+            <option value="TIENDA" selected>TIENDA</option>
           </select>
         </div>
       </div>
     </header>
 
     <main>
+      <!-- DASHBOARD -->
       <section class="view active" id="dashboard">
         <div class="metric-grid">
           <article class="metric">
@@ -51,12 +52,12 @@
             <strong id="metricValue">Bs 0.00</strong>
           </article>
           <article class="metric">
-            <span>Productos bajos</span>
-            <strong id="metricLow">0</strong>
+            <span>Total productos</span>
+            <strong id="metricTotalProducts">0</strong>
           </article>
           <article class="metric">
-            <span>Productos agotados</span>
-            <strong id="metricOut">0</strong>
+            <span>Ventas hoy</span>
+            <strong id="metricSalesToday">0</strong>
           </article>
           <article class="metric">
             <span>Ganancia aprox.</span>
@@ -66,39 +67,16 @@
 
         <section class="card">
           <div class="card-header">
-            <span>Resumen por sucursal</span>
+            <span>Catálogo de productos</span>
             <button class="btn-normal" id="refreshBtn">Actualizar</button>
           </div>
           <div class="card-body">
-            <div class="branch-grid" id="branchSummary"></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <span>Productos con alerta</span>
-            <span class="header-note">Stock mínimo y agotados</span>
-          </div>
-          <div class="card-body">
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th>SKU</th>
-                    <th>Sucursal</th>
-                    <th>Stock</th>
-                    <th>Mínimo</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody id="alertRows"></tbody>
-              </table>
-            </div>
+            <div class="catalog-grid" id="catalogGrid"></div>
           </div>
         </section>
       </section>
 
+      <!-- INVENTARIO -->
       <section class="view" id="inventario">
         <section class="card">
           <div class="card-header">
@@ -106,7 +84,7 @@
             <span class="header-note">Altas rápidas y stock por sucursal</span>
           </div>
           <div class="card-body">
-            <form class="form-grid" id="productForm">
+            <form class="form-grid" id="productForm" enctype="multipart/form-data">
               <div class="form-group">
                 <label for="productName">Producto</label>
                 <input id="productName" required placeholder="Pomada premium">
@@ -130,6 +108,10 @@
                   <option>Barba</option>
                   <option>Herramientas</option>
                   <option>Tratamientos</option>
+                  <option>Equipos</option>
+                  <option>Accesorios</option>
+                  <option>Ceras</option>
+                  <option>Shampoos</option>
                 </select>
               </div>
               <div class="form-group">
@@ -156,7 +138,14 @@
                 <label for="initialStock">Stock inicial</label>
                 <input id="initialStock" type="number" min="0" required value="10">
               </div>
-              <button class="btn-script-main" type="submit">Guardar producto</button>
+              <div class="form-group" style="grid-column: span 2;">
+                <label for="productImage">Imagen</label>
+                <input id="productImage" type="file" accept="image/*">
+                <div id="imagePreview" style="margin-top: 10px; display: none;">
+                  <img id="previewImg" src="" alt="Vista previa" style="max-width: 150px; border-radius: 8px; border: 2px solid var(--gold);">
+                </div>
+              </div>
+              <button class="btn-script-main" type="submit" style="grid-column: span 2;">Guardar producto</button>
             </form>
           </div>
         </section>
@@ -182,6 +171,7 @@
                     <th>BALLIVIAN</th>
                     <th>TIENDA</th>
                     <th>Total</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="inventoryRows"></tbody>
@@ -191,36 +181,33 @@
         </section>
       </section>
 
+      <!-- VENTAS SIMPLIFICADA -->
       <section class="view" id="ventas">
         <div class="sales-layout">
           <section class="card">
             <div class="card-header">
               <span>Nueva venta</span>
-              <span class="header-note">Busca, agrega y confirma</span>
+              <span class="header-note">Busca, ajusta precio y confirma</span>
             </div>
             <div class="card-body">
-              <div class="form-grid compact">
+              <div class="form-grid compact" style="grid-template-columns: 1fr 100px 120px auto;">
                 <div class="form-group wide">
                   <label for="saleSearch">Producto</label>
-                  <input id="saleSearch" placeholder="Nombre, SKU, código de barras o QR">
+                  <input id="saleSearch" placeholder="Nombre, SKU, código...">
                 </div>
                 <div class="form-group">
                   <label for="saleQty">Cantidad</label>
                   <input id="saleQty" type="number" min="1" value="1">
                 </div>
                 <div class="form-group">
-                  <label for="salePrice">Precio aplicado</label>
+                  <label for="salePrice">Precio (Bs)</label>
                   <input id="salePrice" type="number" min="0" step="0.01" placeholder="Automático">
                 </div>
-                <div class="form-group">
-                  <label for="priceReason">Motivo cambio</label>
-                  <input id="priceReason" placeholder="Promoción, descuento...">
-                </div>
-                <div class="form-group">
-                  <label for="authorizedBy">Autoriza</label>
-                  <input id="authorizedBy" placeholder="Admin o encargado">
-                </div>
                 <button class="btn-script-main" id="addToCart" type="button">Agregar</button>
+              </div>
+
+              <div style="margin-top: 10px;">
+                <input id="saleObservations" placeholder="Detalles adicionales (opcional)" style="width:100%; padding:8px; border-radius:8px; background:#1e1c18; border:1px solid var(--line); color:#fff3df;">
               </div>
 
               <div class="table-wrapper cart-table">
@@ -237,50 +224,22 @@
                   <tbody id="cartRows"></tbody>
                 </table>
               </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; gap: 20px; align-items: baseline;">
+                  <span style="color: var(--muted);">Subtotal: <strong id="subtotalText" style="color: var(--gold-soft);">Bs 0.00</strong></span>
+                  <span style="color: var(--muted);">Total: <strong id="totalText" style="color: var(--gold); font-size: 1.3rem;">Bs 0.00</strong></span>
+                </div>
+                <button class="btn-script-main" id="confirmSale" style="padding: 12px 32px;">✅ Confirmar venta</button>
+              </div>
             </div>
           </section>
-
-          <aside class="card checkout-card">
-            <div class="card-header">
-              <span>Cobro</span>
-            </div>
-            <div class="card-body">
-              <div class="form-group">
-                <label for="sellerName">Vendedor</label>
-                <input id="sellerName" value="Administrador">
-              </div>
-              <div class="form-group">
-                <label for="customerName">Cliente opcional</label>
-                <input id="customerName" placeholder="Sin nombre">
-              </div>
-              <div class="form-group">
-                <label for="paymentMethod">Método de pago</label>
-                <select id="paymentMethod">
-                  <option>Efectivo</option>
-                  <option>QR</option>
-                  <option>Tarjeta</option>
-                  <option>Transferencia</option>
-                  <option>Otro</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="discountInput">Descuento</label>
-                <input id="discountInput" type="number" min="0" step="0.01" value="0">
-              </div>
-              <div class="totals">
-                <div><span>Subtotal</span><strong id="subtotalText">Bs 0.00</strong></div>
-                <div><span>Descuento</span><strong id="discountText">Bs 0.00</strong></div>
-                <div class="grand-total"><span>Total</span><strong id="totalText">Bs 0.00</strong></div>
-              </div>
-              <button class="btn-script-main full" id="confirmSale">Confirmar venta</button>
-            </div>
-          </aside>
         </div>
 
         <section class="card">
           <div class="card-header">
             <span>Historial de ventas</span>
-            <span class="header-note">Completadas y listas para comprobante</span>
+            <span class="header-note">Últimas ventas registradas</span>
           </div>
           <div class="card-body">
             <div class="table-wrapper">
@@ -290,7 +249,6 @@
                     <th>Número</th>
                     <th>Fecha</th>
                     <th>Sucursal</th>
-                    <th>Vendedor</th>
                     <th>Total</th>
                     <th>Pago</th>
                     <th>Estado</th>
@@ -303,6 +261,7 @@
         </section>
       </section>
 
+      <!-- MOVIMIENTOS -->
       <section class="view" id="movimientos">
         <section class="card">
           <div class="card-header">
