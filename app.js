@@ -609,18 +609,25 @@ function showSearchResults(results) {
   document.body.appendChild(container);
 }
 
+// ===================== MODIFICADO: NO AGREGA AUTOMÁTICAMENTE =====================
 function selectProductForSale(product) {
+  // Rellenar el campo de búsqueda con el nombre del producto
   els.saleSearch.value = product.name;
+  
+  // Buscar el producto completo en la lista global
   const found = products.find(p => p.id === product.id);
   if (found) {
+    // Cargar el precio de venta en el campo correspondiente
     const priceInput = document.querySelector('#salePrice');
-    if (priceInput) priceInput.value = found.sale_price;
+    if (priceInput) {
+      priceInput.value = found.sale_price;
+    }
+    // Mostrar el stock disponible en la sucursal TIENDA (informativo)
     const stock = found.stock?.TIENDA || 0;
     showToast(`📦 Stock en TIENDA: ${stock} unidades`);
-    setTimeout(() => {
-      addToCart();
-    }, 300);
   }
+  // 🔥 ELIMINADO: el setTimeout que llamaba a addToCart()
+  // Ahora el usuario debe hacer clic en "Agregar" manualmente
 }
 
 function removeSearchResults() {
@@ -672,7 +679,7 @@ function updateFilters() {
   });
 }
 
-// ===================== CARRITO Y VENTAS (CORREGIDO) =====================
+// ===================== CARRITO Y VENTAS =====================
 function addToCart() {
   const branch = "TIENDA";
   const term = els.saleSearch.value.trim().toLowerCase();
@@ -724,16 +731,17 @@ function addToCart() {
   showToast(`✅ ${qty}x ${product.name} agregado al carrito`);
 }
 
+// ===================== RENDER CARRITO =====================
 function renderCart() {
   if (!els.cartRows) return;
   els.cartRows.innerHTML = cart.length
-    ? cart.map((item) => `
+    ? cart.map((item, index) => `
       <tr>
         <td>${item.name}</td>
         <td>${item.quantity}</td>
         <td>${money.format(item.unit_price)}</td>
         <td>${money.format(item.unit_price * item.quantity)}</td>
-        <td><button class="action-link" onclick="removeFromCart(${item.product_id})">Quitar</button></td>
+        <td><button class="action-link" onclick="removeFromCart(${index})">Quitar</button></td>
       </tr>
     `).join("")
     : `<tr><td colspan="5">Agrega productos para iniciar la venta.</td></tr>`;
@@ -743,18 +751,16 @@ function renderCart() {
   els.totalText.textContent = money.format(subtotal);
 }
 
-function removeFromCart(id) {
-  // 🔥 CONVERSIÓN A NÚMERO para que la comparación sea estricta
-  const productId = Number(id);
-  const index = cart.findIndex(item => item.product_id === productId);
-  if (index !== -1) {
+// ===================== ELIMINAR DEL CARRITO POR ÍNDICE =====================
+function removeFromCart(index) {
+  if (index >= 0 && index < cart.length) {
     const removed = cart[index];
     cart.splice(index, 1);
     renderCart();
     showToast(`🗑️ ${removed.name} eliminado del carrito`);
   } else {
     showToast('Producto no encontrado en el carrito');
-    console.warn('Intento de eliminar ID:', productId, 'Carrito actual:', cart);
+    console.warn('Índice inválido:', index, 'Carrito:', cart);
   }
 }
 
