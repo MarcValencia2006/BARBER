@@ -34,7 +34,7 @@ const els = {
   toast: document.querySelector("#toast"),
 };
 
-// NAVEGACIÓN
+// ===================== NAVEGACIÓN =====================
 document.querySelectorAll(".nav-link").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".nav-link").forEach((item) => item.classList.remove("active"));
@@ -50,13 +50,10 @@ document.querySelector("#confirmSale").addEventListener("click", confirmSale);
 els.branchSelect.addEventListener("change", render);
 els.inventorySearch.addEventListener("input", renderInventory);
 
-// ============================================
-// FORMULARIO DE PRODUCTO CON IMAGEN
-// ============================================
+// ===================== FORMULARIO DE PRODUCTO =====================
 els.productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const branch = selectedBranch() === "TODAS" ? "TIENDA" : selectedBranch();
-
   const imageFile = document.querySelector("#productImage")?.files[0];
 
   const payload = {
@@ -93,7 +90,7 @@ els.productForm.addEventListener("submit", async (event) => {
     els.productForm.reset();
     setDefaultProductValues();
     document.querySelector("#imagePreview").style.display = 'none';
-    showToast("Producto guardado en la base de datos");
+    showToast("✅ Producto guardado");
     await loadData();
   } catch (error) {
     showToast(error.message);
@@ -107,21 +104,15 @@ document.addEventListener('change', function(e) {
     if (file) {
       const reader = new FileReader();
       reader.onload = function(event) {
-        const preview = document.querySelector('#previewImg');
-        const container = document.querySelector('#imagePreview');
-        if (preview && container) {
-          preview.src = event.target.result;
-          container.style.display = 'block';
-        }
+        document.querySelector('#previewImg').src = event.target.result;
+        document.querySelector('#imagePreview').style.display = 'block';
       };
       reader.readAsDataURL(file);
     }
   }
 });
 
-// ============================================
-// CARGA DE DATOS
-// ============================================
+// ===================== CARGA DE DATOS =====================
 async function loadData() {
   try {
     const [productData, saleData, movementData] = await Promise.all([
@@ -129,7 +120,6 @@ async function loadData() {
       request("/sales"),
       request("/movements"),
     ]);
-
     products = productData;
     sales = saleData;
     movements = movementData;
@@ -171,7 +161,6 @@ function visibleProducts() {
   const term = els.inventorySearch.value.trim().toLowerCase();
   const categoryFilter = document.getElementById('filterCategory')?.value || '';
   const brandFilter = document.getElementById('filterBrand')?.value || '';
-
   return products.filter((product) => {
     const matchesBranch = selectedBranch() === "TODAS" || productStock(product) > 0;
     const matchesTerm = [product.name, product.sku, product.category, product.barcode, product.qr_code].some((value) =>
@@ -183,6 +172,7 @@ function visibleProducts() {
   });
 }
 
+// ===================== RENDER PRINCIPAL =====================
 function render() {
   renderMetrics();
   renderBranches();
@@ -241,22 +231,17 @@ function getAlerts() {
   ).filter((item) => item.status !== "OK" && (selectedBranch() === "TODAS" || item.branch === selectedBranch()));
 }
 
-// ============================================
-// CATÁLOGO EN DASHBOARD
-// ============================================
+// ===================== CATÁLOGO EN DASHBOARD =====================
 function renderCatalog() {
   const grid = els.catalogGrid;
   if (!grid) return;
-
   const catalogProducts = selectedBranch() === "TODAS"
     ? products
     : products.filter(p => productStock(p) > 0);
-
   if (!catalogProducts.length) {
     grid.innerHTML = `<p style="color: var(--muted); text-align:center; padding:20px;">No hay productos disponibles.</p>`;
     return;
   }
-
   grid.innerHTML = catalogProducts.map(p => {
     const totalStock = BRANCHES.reduce((sum, b) => sum + Number(p.stock[b] || 0), 0);
     return `
@@ -274,9 +259,7 @@ function renderCatalog() {
   }).join('');
 }
 
-// ============================================
-// INVENTARIO CON EDITOR Y AJUSTE DE STOCK
-// ============================================
+// ===================== INVENTARIO =====================
 function renderInventory() {
   const rows = visibleProducts();
   els.inventoryRows.innerHTML = rows.length
@@ -307,12 +290,10 @@ function renderInventory() {
         </tr>
       `;
     }).join("")
-    : `<tr><td colspan="${BRANCHES.length + 5}">Inventario vacío. Registra tu primer producto desde el formulario superior.</td></tr>`;
+    : `<tr><td colspan="${BRANCHES.length + 5}">Inventario vacío.</td></tr>`;
 }
 
-// ============================================
-// FUNCIONES DE EDICIÓN Y AJUSTE DE STOCK
-// ============================================
+// ===================== EDICIÓN Y AJUSTE DE STOCK =====================
 function createEditModal() {
   const modal = document.createElement('div');
   modal.id = 'editModal';
@@ -327,16 +308,7 @@ function createEditModal() {
     align-items: center;
   `;
   modal.innerHTML = `
-    <div style="
-      background: var(--panel);
-      border: 2px solid var(--gold);
-      border-radius: 12px;
-      padding: 30px;
-      max-width: 600px;
-      width: 90%;
-      max-height: 90vh;
-      overflow-y: auto;
-    ">
+    <div style="background: var(--panel); border: 2px solid var(--gold); border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
       <h2 style="color: var(--gold); margin-bottom: 20px;">✏️ Editar Producto</h2>
       <form id="editForm" style="display: grid; gap: 12px;">
         <input id="editId" type="hidden">
@@ -375,6 +347,7 @@ function createEditModal() {
   `;
   document.body.appendChild(modal);
 
+  // Previsualizar imagen en el modal de edición
   document.getElementById('editImageFile').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
@@ -416,8 +389,8 @@ function createEditModal() {
     };
 
     let finalImageUrl = currentImageUrl;
-
     try {
+      // 1. Subir imagen si se seleccionó una
       if (imageFile) {
         const formData = new FormData();
         formData.append('product_id', id);
@@ -434,8 +407,10 @@ function createEditModal() {
         finalImageUrl = uploadData.image_url;
       }
 
+      // 2. Incluir image_url en el payload
       payload.image_url = finalImageUrl;
 
+      // 3. Actualizar producto
       const response = await fetch(`${API_BASE}/products/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -450,7 +425,7 @@ function createEditModal() {
       modal.style.display = 'none';
       await loadData();
     } catch (error) {
-      console.error('Error completo:', error);
+      console.error('Error en edición:', error);
       showToast('❌ ' + error.message);
     }
   });
@@ -473,9 +448,9 @@ async function editProduct(productId) {
     document.getElementById('editBuyPrice').value = product.purchase_price || 0;
     document.getElementById('editSellPrice').value = product.sale_price || 0;
     document.getElementById('editMinStock').value = product.min_stock || 0;
+    document.getElementById('editCurrentImageUrl').value = product.image_url || '';
 
-    document.getElementById('editCurrentImageUrl').value = product.image_url || null;
-
+    // Limpiar campo de imagen y previsualización
     document.getElementById('editImageFile').value = '';
     const previewContainer = document.getElementById('editImagePreview');
     const previewImg = document.getElementById('editPreviewImg');
@@ -503,13 +478,11 @@ async function editProduct(productId) {
 async function adjustStock(productId, branchCode, currentStock) {
   const newStock = prompt(`Stock actual en ${branchCode}: ${currentStock}\nIngresa el nuevo stock (puede ser negativo para reducir):`, currentStock);
   if (newStock === null) return;
-
   const quantity = Number(newStock) - currentStock;
   if (isNaN(quantity)) {
     showToast('Cantidad inválida');
     return;
   }
-
   try {
     const response = await fetch(`${API_BASE}/products/${productId}/stock`, {
       method: 'PATCH',
@@ -517,7 +490,7 @@ async function adjustStock(productId, branchCode, currentStock) {
       body: JSON.stringify({
         branch_code: branchCode,
         quantity: quantity,
-        reason: 'Ajuste manual desde inventario',
+        reason: 'Ajuste manual',
         user_name: 'Administrador'
       }),
     });
@@ -532,9 +505,7 @@ async function adjustStock(productId, branchCode, currentStock) {
   }
 }
 
-// ============================================
-// BÚSQUEDA EN VENTAS CON IMÁGENES
-// ============================================
+// ===================== BÚSQUEDA EN VENTAS =====================
 let searchTimeout;
 els.saleSearch.addEventListener('input', function() {
   clearTimeout(searchTimeout);
@@ -559,7 +530,6 @@ async function performSearch(term) {
 
 function showSearchResults(results) {
   removeSearchResults();
-
   if (!results || results.length === 0) {
     const container = document.createElement('div');
     container.className = 'search-results';
@@ -610,9 +580,7 @@ function showSearchResults(results) {
     `;
     item.onmouseover = () => item.style.background = 'rgba(255,215,0,0.1)';
     item.onmouseout = () => item.style.background = 'transparent';
-
     const stockColor = totalStock <= 0 ? '#6f241f' : totalStock <= (product.min_stock || 0) ? '#6f5018' : '#1f6d45';
-
     item.innerHTML = `
       <img src="${product.image_url || '/placeholder.png'}" 
            style="width: 45px; height: 45px; object-fit: cover; border-radius: 6px; background: #1a1814;"
@@ -666,9 +634,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ============================================
-// FILTROS EN INVENTARIO
-// ============================================
+// ===================== FILTROS EN INVENTARIO =====================
 function updateFilters() {
   const searchBox = document.querySelector('.search-box');
   if (!searchBox) return;
@@ -681,10 +647,8 @@ function updateFilters() {
     flex-wrap: wrap;
     margin-top: 10px;
   `;
-  
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
   const brands = [...new Set(products.map(p => p.brand).filter(Boolean))];
-
   filtersDiv.innerHTML = `
     <select id="filterCategory" style="padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--text);">
       <option value="">Todas las categorías</option>
@@ -708,31 +672,25 @@ function updateFilters() {
   });
 }
 
-// ============================================
-// CARRITO Y VENTAS (MEJORADO)
-// ============================================
+// ===================== CARRITO Y VENTAS (CORREGIDO) =====================
 function addToCart() {
   const branch = "TIENDA";
-
   const term = els.saleSearch.value.trim().toLowerCase();
   const qty = Number(els.saleQty.value || 1);
   const product = products.find((item) =>
     [item.name, item.sku, item.barcode, item.qr_code].some((value) => String(value || "").toLowerCase().includes(term))
   );
-
   if (!product) {
     showToast("Producto no encontrado");
     return;
   }
 
-  // Verificar stock en TIENDA
   const currentQty = cart.find((item) => item.product_id === product.id)?.quantity || 0;
   if (Number(product.stock[branch] || 0) < currentQty + qty) {
     showToast(`Stock insuficiente en ${branch} (disponible: ${product.stock[branch] || 0})`);
     return;
   }
 
-  // Precio aplicado: si el usuario ingresó un precio, usarlo; si no, el precio de venta
   const overrideValue = document.querySelector("#salePrice").value.trim();
   let appliedPrice = Number(product.sale_price);
   if (overrideValue !== "") {
@@ -745,7 +703,7 @@ function addToCart() {
   const existing = cart.find((item) => item.product_id === product.id);
   if (existing) {
     existing.quantity += qty;
-    existing.unit_price = appliedPrice; // Actualizar precio si cambió
+    existing.unit_price = appliedPrice;
   } else {
     cart.push({
       product_id: product.id,
@@ -763,12 +721,11 @@ function addToCart() {
   els.saleQty.value = 1;
   document.querySelector("#salePrice").value = "";
   renderCart();
-  showToast(`✅ ${qty}x ${product.name} agregado al carrito (Bs ${money.format(appliedPrice)} c/u)`);
+  showToast(`✅ ${qty}x ${product.name} agregado al carrito`);
 }
 
 function renderCart() {
   if (!els.cartRows) return;
-
   els.cartRows.innerHTML = cart.length
     ? cart.map((item) => `
       <tr>
@@ -787,7 +744,7 @@ function renderCart() {
 }
 
 function removeFromCart(id) {
-  // Convertir a número por si viene como string
+  // 🔥 CONVERSIÓN A NÚMERO para que la comparación sea estricta
   const productId = Number(id);
   const index = cart.findIndex(item => item.product_id === productId);
   if (index !== -1) {
@@ -803,16 +760,12 @@ function removeFromCart(id) {
 
 async function confirmSale() {
   const branch = "TIENDA";
-
   if (!cart.length) {
     showToast("El carrito está vacío");
     return;
   }
-
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const observations = els.saleObservations?.value?.trim() || null;
-
-  // Mostrar resumen antes de confirmar
   const confirmMessage = `Confirmar venta por Bs ${money.format(subtotal)} en ${branch}?\n\n` +
     cart.map(item => `${item.quantity}x ${item.name} (${money.format(item.unit_price)} c/u)`).join('\n');
   if (!confirm(confirmMessage)) return;
@@ -837,7 +790,6 @@ async function confirmSale() {
         })),
       }),
     });
-
     cart = [];
     els.saleObservations.value = '';
     showToast(`✅ Venta confirmada por Bs ${money.format(subtotal)}`);
@@ -892,13 +844,12 @@ function showToast(message) {
   }, 4000);
 }
 
-// ============================================
-// INICIALIZACIÓN
-// ============================================
+// ===================== INICIALIZACIÓN =====================
 window.removeFromCart = removeFromCart;
 window.editProduct = editProduct;
 window.adjustStock = adjustStock;
 
+// Estilos para catálogo
 const styleCatalog = document.createElement('style');
 styleCatalog.textContent = `
   .catalog-grid {

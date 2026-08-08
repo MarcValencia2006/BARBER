@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo - Barber Stock</title>
+    <style>
+        body {
+            background: #0c0b09;
+            color: #eee8d8;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .catalog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .catalog-item {
+            background: #171510;
+            border: 1px solid #ffd700;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        .catalog-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .catalog-item h3 {
+            color: #ffd700;
+            margin: 10px 0 5px;
+            font-size: 14px;
+        }
+        .catalog-item .price {
+            color: #ffd700;
+            font-weight: bold;
+        }
+        .catalog-header {
+            text-align: center;
+            padding: 20px;
+        }
+        .catalog-header h1 {
+            color: #ffd700;
+            font-size: 2.5rem;
+        }
+        button {
+            background: #ffd700;
+            color: #0c0b09;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #ffed4a;
+        }
+        .filters {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 20px;
+        }
+        .filters input, .filters select {
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: 1px solid #ffd700;
+            background: #171510;
+            color: #eee8d8;
+        }
+        @media print {
+            .filters { display: none; }
+            button { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="catalog-header">
+        <h1>📋 Catálogo Barber Stock</h1>
+        <p>Inventario actualizado · <span id="catalogDate"></span></p>
+        <button onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+
+    <div class="filters">
+        <input id="searchCatalog" placeholder="Buscar producto..." oninput="applyFilters()">
+        <select id="categoryFilter" onchange="applyFilters()">
+            <option value="">Todas las categorías</option>
+        </select>
+    </div>
+
+    <div class="catalog-grid" id="catalogGrid"></div>
+
+    <script>
+        const API_BASE = window.location.hostname === "localhost" ? "http://localhost:3000/api" : "/api";
+        const money = new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" });
+        let allProducts = [];
+
+        async function loadCatalog() {
+            try {
+                const response = await fetch(`${API_BASE}/products`);
+                allProducts = await response.json();
+                renderCatalog(allProducts);
+                populateFilters(allProducts);
+                document.getElementById('catalogDate').textContent = new Date().toLocaleDateString('es-BO', {
+                    year: 'numeric', month: 'long', day: 'numeric'
+                });
+            } catch (error) {
+                document.getElementById('catalogGrid').innerHTML = '<p>Error al cargar el catálogo</p>';
+            }
+        }
+
+        function renderCatalog(products) {
+            const grid = document.getElementById('catalogGrid');
+            if (!products || products.length === 0) {
+                grid.innerHTML = '<p>No hay productos disponibles</p>';
+                return;
+            }
+            grid.innerHTML = products.map(p => `
+                <div class="catalog-item">
+                    <img src="${p.image_url || 'https://via.placeholder.com/200x150?text=Sin+Imagen'}" 
+                         alt="${p.name}"
+                         onerror="this.src='https://via.placeholder.com/200x150?text=Sin+Imagen'">
+                    <h3>${p.name}</h3>
+                    <div style="font-size:12px;color:#a79b7e;">${p.sku}</div>
+                    <div class="price">${money.format(p.sale_price || 0)}</div>
+                    <div style="font-size:12px;color:#a79b7e;">Stock: ${p.total_stock || 0}</div>
+                </div>
+            `).join('');
+        }
+
+        function populateFilters(products) {
+            const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
+            const select = document.getElementById('categoryFilter');
+            categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                select.appendChild(opt);
+            });
+        }
+
+        function applyFilters() {
+            const category = document.getElementById('categoryFilter').value;
+            const search = document.getElementById('searchCatalog').value.toLowerCase();
+            let filtered = allProducts;
+            if (category) filtered = filtered.filter(p => p.category === category);
+            if (search) filtered = filtered.filter(p => 
+                p.name.toLowerCase().includes(search) || 
+                p.sku.toLowerCase().includes(search)
+            );
+            renderCatalog(filtered);
+        }
+
+        loadCatalog();
+    </script>
+</body>
+</html>
