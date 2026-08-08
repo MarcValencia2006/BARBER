@@ -340,7 +340,6 @@ function createEditModal() {
       <h2 style="color: var(--gold); margin-bottom: 20px;">✏️ Editar Producto</h2>
       <form id="editForm" style="display: grid; gap: 12px;">
         <input id="editId" type="hidden">
-        <!-- Campo oculto para guardar la URL actual de la imagen -->
         <input id="editCurrentImageUrl" type="hidden">
         <div class="form-group"><label>Nombre *</label><input id="editName" required></div>
         <div class="form-group"><label>SKU *</label><input id="editSku" required></div>
@@ -376,7 +375,7 @@ function createEditModal() {
   `;
   document.body.appendChild(modal);
 
-  // Previsualizar imagen en el modal de edición
+  // Previsualizar imagen
   document.getElementById('editImageFile').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
@@ -402,10 +401,8 @@ function createEditModal() {
     e.preventDefault();
     const id = document.getElementById('editId').value;
     const imageFile = document.getElementById('editImageFile').files[0];
-    // Recuperar la URL actual de la imagen (guardada al abrir el modal)
     const currentImageUrl = document.getElementById('editCurrentImageUrl').value || null;
 
-    // Preparar datos base del producto
     const payload = {
       name: document.getElementById('editName').value.trim(),
       sku: document.getElementById('editSku').value.trim().toUpperCase(),
@@ -419,11 +416,10 @@ function createEditModal() {
       min_stock: Number(document.getElementById('editMinStock').value || 0),
     };
 
-    // Inicialmente, la imagen será la actual (o null si no hay)
     let finalImageUrl = currentImageUrl;
 
     try {
-      // 1. Si se seleccionó una nueva imagen, subirla primero
+      // 1. Subir imagen si se seleccionó una
       if (imageFile) {
         const formData = new FormData();
         formData.append('product_id', id);
@@ -434,16 +430,17 @@ function createEditModal() {
         });
         if (!uploadRes.ok) {
           const err = await uploadRes.json();
-          throw new Error('Error al subir la imagen: ' + (err.error || ''));
+          // Mostrar el error real del servidor
+          throw new Error('Error al subir imagen: ' + (err.error || uploadRes.statusText));
         }
         const uploadData = await uploadRes.json();
-        finalImageUrl = uploadData.image_url; // URL generada por Supabase
+        finalImageUrl = uploadData.image_url;
       }
 
-      // 2. Agregar image_url al payload (obligatorio para el backend)
+      // 2. Incluir image_url en el payload
       payload.image_url = finalImageUrl;
 
-      // 3. Actualizar el producto con todos los datos (incluyendo image_url)
+      // 3. Actualizar producto
       const response = await fetch(`${API_BASE}/products/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -451,18 +448,24 @@ function createEditModal() {
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Error al actualizar el producto');
+        // Mostrar el error real del servidor
+        throw new Error('Error al actualizar: ' + (error.error || response.statusText));
       }
 
       showToast('✅ Producto actualizado correctamente');
       modal.style.display = 'none';
       await loadData();
     } catch (error) {
-      console.error('Error en edición:', error);
+      console.error('Error completo:', error);
       showToast('❌ ' + error.message);
     }
   });
 }
+
+
+
+
+
 
 async function editProduct(productId) {
   try {
