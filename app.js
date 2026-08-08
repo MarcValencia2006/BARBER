@@ -725,12 +725,14 @@ function addToCart() {
     return;
   }
 
+  // Verificar stock en TIENDA
   const currentQty = cart.find((item) => item.product_id === product.id)?.quantity || 0;
   if (Number(product.stock[branch] || 0) < currentQty + qty) {
     showToast(`Stock insuficiente en ${branch} (disponible: ${product.stock[branch] || 0})`);
     return;
   }
 
+  // Precio aplicado: si el usuario ingresó un precio, usarlo; si no, el precio de venta
   const overrideValue = document.querySelector("#salePrice").value.trim();
   let appliedPrice = Number(product.sale_price);
   if (overrideValue !== "") {
@@ -743,7 +745,7 @@ function addToCart() {
   const existing = cart.find((item) => item.product_id === product.id);
   if (existing) {
     existing.quantity += qty;
-    existing.unit_price = appliedPrice;
+    existing.unit_price = appliedPrice; // Actualizar precio si cambió
   } else {
     cart.push({
       product_id: product.id,
@@ -785,7 +787,9 @@ function renderCart() {
 }
 
 function removeFromCart(id) {
-  const index = cart.findIndex(item => item.product_id === id);
+  // Convertir a número por si viene como string
+  const productId = Number(id);
+  const index = cart.findIndex(item => item.product_id === productId);
   if (index !== -1) {
     const removed = cart[index];
     cart.splice(index, 1);
@@ -793,6 +797,7 @@ function removeFromCart(id) {
     showToast(`🗑️ ${removed.name} eliminado del carrito`);
   } else {
     showToast('Producto no encontrado en el carrito');
+    console.warn('Intento de eliminar ID:', productId, 'Carrito actual:', cart);
   }
 }
 
@@ -807,6 +812,7 @@ async function confirmSale() {
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const observations = els.saleObservations?.value?.trim() || null;
 
+  // Mostrar resumen antes de confirmar
   const confirmMessage = `Confirmar venta por Bs ${money.format(subtotal)} en ${branch}?\n\n` +
     cart.map(item => `${item.quantity}x ${item.name} (${money.format(item.unit_price)} c/u)`).join('\n');
   if (!confirm(confirmMessage)) return;
