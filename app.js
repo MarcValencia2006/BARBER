@@ -18,7 +18,6 @@ const els = {
   metricOut: document.querySelector("#metricOut"),
   metricProfit: document.querySelector("#metricProfit"),
   branchSummary: document.querySelector("#branchSummary"),
-  // Ya no usamos alertRows, lo reemplazamos por catalogGrid
   catalogGrid: document.querySelector("#catalogGrid"),
   productForm: document.querySelector("#productForm"),
   inventorySearch: document.querySelector("#inventorySearch"),
@@ -187,7 +186,7 @@ function visibleProducts() {
 function render() {
   renderMetrics();
   renderBranches();
-  renderCatalog();        // Reemplaza a renderAlerts()
+  renderCatalog();
   renderInventory();
   renderCart();
   renderSales();
@@ -201,7 +200,6 @@ function renderMetrics() {
   const todaySales = sales.filter((sale) => String(sale.sale_date).startsWith(today));
   const revenue = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
   const profit = todaySales.reduce((sum, sale) => sum + Number(sale.estimated_profit || 0), 0);
-  // Calculamos bajos y agotados para las métricas (aunque ya no se muestre la tabla)
   const alerts = getAlerts();
 
   els.chipStock.textContent = stock;
@@ -228,7 +226,6 @@ function renderBranches() {
   }).join("");
 }
 
-// Función auxiliar para alertas (solo para métricas)
 function getAlerts() {
   return products.flatMap((product) =>
     BRANCHES.map((branch) => {
@@ -245,13 +242,12 @@ function getAlerts() {
 }
 
 // ============================================
-// CATÁLOGO EN DASHBOARD (nuevo)
+// CATÁLOGO EN DASHBOARD
 // ============================================
 function renderCatalog() {
   const grid = els.catalogGrid;
   if (!grid) return;
 
-  // Mostrar todos los productos (sin filtrar por sucursal, o podemos filtrar según selección)
   const catalogProducts = selectedBranch() === "TODAS"
     ? products
     : products.filter(p => productStock(p) > 0);
@@ -361,7 +357,15 @@ function createEditModal() {
         <div class="form-group"><label>Precio compra</label><input id="editBuyPrice" type="number" step="0.01"></div>
         <div class="form-group"><label>Precio venta</label><input id="editSellPrice" type="number" step="0.01"></div>
         <div class="form-group"><label>Stock mínimo</label><input id="editMinStock" type="number"></div>
-        <div class="form-group"><label>URL imagen</label><input id="editImage" placeholder="URL de la imagen"></div>
+        <!-- CAMPO DE IMAGEN CON ARCHIVO (reemplaza al de URL) -->
+        <div class="form-group" style="grid-column: span 2;">
+          <label>Imagen del producto</label>
+          <input type="file" id="editImageFile" accept="image/*">
+          <div id="editImagePreview" style="margin-top: 8px; display: none;">
+            <img id="editPreviewImg" src="" alt="Vista previa" style="max-width: 150px; border-radius: 8px; border: 2px solid var(--gold);">
+          </div>
+          <small style="color: var(--muted);">Puedes subir una nueva imagen o dejar la actual (se mantendrá si no seleccionas nada).</small>
+        </div>
         <div style="display: flex; gap: 10px; margin-top: 10px;">
           <button type="submit" class="btn-script-main" style="flex:1;">💾 Guardar cambios</button>
           <button type="button" class="btn-normal" id="closeEditModal" style="flex:1;">Cancelar</button>
@@ -370,6 +374,21 @@ function createEditModal() {
     </div>
   `;
   document.body.appendChild(modal);
+
+  // Previsualizar imagen en el modal de edición
+  document.getElementById('editImageFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        document.getElementById('editPreviewImg').src = event.target.result;
+        document.getElementById('editImagePreview').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    } else {
+      document.getElementById('editImagePreview').style.display = 'none';
+    }
+  });
 
   document.getElementById('closeEditModal').addEventListener('click', () => {
     modal.style.display = 'none';
@@ -381,6 +400,9 @@ function createEditModal() {
   document.getElementById('editForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('editId').value;
+    const imageFile = document.getElementById('editImageFile').files[0];
+
+    // Primero actualizar los datos del producto (sin imagen)
     const payload = {
       name: document.getElementById('editName').value.trim(),
       sku: document.getElementById('editSku').value.trim().toUpperCase(),
@@ -392,10 +414,10 @@ function createEditModal() {
       purchase_price: Number(document.getElementById('editBuyPrice').value || 0),
       sale_price: Number(document.getElementById('editSellPrice').value || 0),
       min_stock: Number(document.getElementById('editMinStock').value || 0),
-      image_url: document.getElementById('editImage').value.trim() || null,
     };
 
     try {
+      // 1. Actualizar datos del producto
       const response = await fetch(`${API_BASE}/products/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -405,6 +427,22 @@ function createEditModal() {
         const error = await response.json();
         throw new Error(error.error || 'Error al actualizar');
       }
+
+      // 2. Si hay imagen, subirla
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('product_id', id);
+        formData.append('image', imageFile);
+        const uploadRes = await fetch(`${API_BASE}/upload/product-image`, {
+          method: 'POST',
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json();
+          throw new Error(err.error || 'Error al subir la imagen');
+        }
+      }
+
       showToast('✅ Producto actualizado correctamente');
       modal.style.display = 'none';
       await loadData();
@@ -431,7 +469,26 @@ async function editProduct(productId) {
     document.getElementById('editBuyPrice').value = product.purchase_price || 0;
     document.getElementById('editSellPrice').value = product.sale_price || 0;
     document.getElementById('editMinStock').value = product.min_stock || 0;
-    document.getElementById('editImage').value = product.image_url || '';
+
+    // Limpiar campo de imagen y previsualización
+    document.getElementById('editImageFile').value = '';
+    document.getElementById('editImagePreview').style.display = 'none';
+
+    // Mostrar la imagen actual (si existe) como referencia
+    if (product.image_url) {
+      const previewContainer = document.getElementById('editImagePreview');
+      const previewImg = document.getElementById('editPreviewImg');
+      previewImg.src = product.image_url;
+      previewContainer.style.display = 'block';
+      // Agregar un pequeño indicador de que es la imagen actual
+      const label = document.createElement('small');
+      label.style.cssText = 'display:block; color: var(--muted); margin-top: 4px;';
+      label.textContent = '📸 Imagen actual (puedes reemplazarla seleccionando una nueva)';
+      // Quitar el anterior si existe
+      const oldLabel = previewContainer.querySelector('small');
+      if (oldLabel) oldLabel.remove();
+      previewContainer.appendChild(label);
+    }
 
     document.getElementById('editModal').style.display = 'flex';
   } catch (error) {
@@ -472,7 +529,7 @@ async function adjustStock(productId, branchCode, currentStock) {
 }
 
 // ============================================
-// BÚSQUEDA EN VENTAS CON IMÁGENES (sin cambios)
+// BÚSQUEDA EN VENTAS CON IMÁGENES
 // ============================================
 let searchTimeout;
 els.saleSearch.addEventListener('input', function() {
@@ -586,10 +643,8 @@ function selectProductForSale(product) {
   if (found) {
     const priceInput = document.querySelector('#salePrice');
     if (priceInput) priceInput.value = found.sale_price;
-    // Mostrar stock en TIENDA (solo informativo)
     const stock = found.stock?.TIENDA || 0;
     showToast(`📦 Stock en TIENDA: ${stock} unidades`);
-    // Agregar automáticamente al carrito
     setTimeout(() => {
       addToCart();
     }, 300);
@@ -653,7 +708,6 @@ function updateFilters() {
 // CARRITO Y VENTAS (SIMPLIFICADO)
 // ============================================
 function addToCart() {
-  // Siempre usa TIENDA para verificar stock
   const branch = "TIENDA";
 
   const term = els.saleSearch.value.trim().toLowerCase();
@@ -675,8 +729,6 @@ function addToCart() {
 
   const overrideValue = document.querySelector("#salePrice").value;
   const appliedPrice = overrideValue === "" ? Number(product.sale_price) : Number(overrideValue);
-  // Si cambia el precio, no pedimos motivo ni autorización (se simplifica)
-  // pero guardamos el cambio de precio como observación en el ítem si se desea
   const priceWasChanged = appliedPrice !== Number(product.sale_price);
 
   const existing = cart.find((item) => item.product_id === product.id);
@@ -714,7 +766,6 @@ function renderCart() {
     : `<tr><td colspan="5">Agrega productos para iniciar la venta.</td></tr>`;
 
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
-  // Sin descuento
   els.subtotalText.textContent = money.format(subtotal);
   els.totalText.textContent = money.format(subtotal);
 }
@@ -725,7 +776,6 @@ function removeFromCart(id) {
 }
 
 async function confirmSale() {
-  // Siempre usa TIENDA
   const branch = "TIENDA";
 
   if (!cart.length) {
@@ -812,7 +862,7 @@ window.removeFromCart = removeFromCart;
 window.editProduct = editProduct;
 window.adjustStock = adjustStock;
 
-// Agregar estilos para el catálogo en el dashboard (si no existen en styles.css)
+// Estilos para el catálogo (si no existen en styles.css)
 const styleCatalog = document.createElement('style');
 styleCatalog.textContent = `
   .catalog-grid {
